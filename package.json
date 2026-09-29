@@ -1,0 +1,11 @@
+{
+  "name": "ticketrush",
+  "private": true,
+  "scripts": {
+    "db:up": "docker compose up -d",
+    "db:reset": "docker compose down -v && docker compose up -d",
+    "emulator": "firebase emulators:start --config firebase/firebase.json",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev"
+  }
+}
