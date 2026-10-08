@@ -13,3 +13,6 @@ export const me = asyncHandler(async (req, res) => {
 export const firebaseToken = asyncHandler(async (req, res) => {
   res.json(await service.firebaseToken(req.user));
 });
+export const google = asyncHandler(async (req, res) => {
+  res.json(await service.googleLogin(req.body));
+});

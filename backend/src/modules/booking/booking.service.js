@@ -22,3 +22,8 @@ export async function cancelOrder(input) {
 export async function listMyOrders(input) {
   return repo.listMyOrders(input);
 }
+// TODO [f] chi tiết đơn của chính người dùng (kiểm tra order.user_id = user.userId)
+export async function getOrder(input) {
+  return repo.getOrder(input);
+}
+

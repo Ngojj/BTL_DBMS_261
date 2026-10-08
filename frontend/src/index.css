@@ -1,3 +1,131 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white border border-black/10 rounded-2xl;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-bold text-sm transition disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-brand {
+    @apply btn bg-brand text-white hover:bg-brand/90;
+  }
+  .btn-dark {
+    @apply btn bg-ink text-white hover:bg-ink/90;
+  }
+  .btn-ghost {
+    @apply btn bg-white border border-black/15 hover:bg-black/5;
+  }
+  .input {
+    @apply w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm focus:outline-none focus:border-royal;
+  }
+  .label {
+    @apply block text-xs font-semibold text-gray-600 mb-1;
+  }
+  .th {
+    @apply text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3;
+  }
+  .td {
+    @apply px-4 py-3 text-sm border-t border-black/5;
+  }
+}
+
+/* Đường quét của khung quét QR */
+@keyframes scan {
+  0%, 100% { transform: translateY(-80px); }
+  50% { transform: translateY(80px); }
+}
+.animate-scan {
+  animation: scan 2.4s ease-in-out infinite;
+}
+
+/* ---------- Thẻ sự kiện dạng vé ----------
+   .ticket        : bóng đổ (drop-shadow chạy sau mask nên vẫn ôm theo hình răng cưa)
+   .ticket-saw    : cắt đuôi vé thành hình răng cưa (bán nguyệt dọc mép phải)
+   .ticket-notch  : cắt hai khuyết tròn ở đầu và cuối đường xé giữa cuống vé và thân vé
+   Hai lớp mask lồng nhau nên tác dụng nhân với nhau. */
+.ticket {
+  --stub: 104px; /* bề rộng cuống vé (khối ngày) */
+  --notch: 10px; /* bán kính khuyết tròn */
+  --tooth: 7px; /* bán kính răng cưa */
+  --pitch: 18px; /* khoảng cách giữa hai răng */
+  display: flex; /* để các vé cùng hàng cao bằng nhau */
+  filter: drop-shadow(0 1px 0.5px rgb(0 0 0 / 0.14)) drop-shadow(0 3px 6px rgb(0 0 0 / 0.05));
+  transition: transform 0.15s, filter 0.15s;
+}
+.ticket:hover {
+  transform: translateY(-2px);
+  filter: drop-shadow(0 1px 0.5px rgb(0 0 0 / 0.16)) drop-shadow(0 8px 14px rgb(0 0 0 / 0.1));
+}
+.ticket-saw {
+  flex: 1;
+  display: flex;
+  mask: radial-gradient(circle at 100% 50%, transparent var(--tooth), #000 calc(var(--tooth) + 0.5px)) 0 0 / 100% var(--pitch) no-repeat round;
+}
+.ticket-notch {
+  flex: 1;
+  mask:
+    radial-gradient(circle at var(--stub) 0, transparent var(--notch), #000 calc(var(--notch) + 0.5px)) 0 0 / 100% 50% no-repeat,
+    radial-gradient(circle at var(--stub) 100%, transparent var(--notch), #000 calc(var(--notch) + 0.5px)) 0 100% / 100% 50% no-repeat;
+}
+.ticket-stub {
+  width: var(--stub);
+  position: relative;
+}
+/* Nét đứt dọc: đường xé giữa cuống và thân vé */
+.ticket-stub::after {
+  content: '';
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  right: 0;
+  border-right: 2px dashed rgb(255 255 255 / 0.65);
+}
+/* Nét đứt ngang kiểu hóa đơn */
+.ticket-rule {
+  border-top: 2px dashed rgb(0 0 0 / 0.14);
+}
+.ticket-barcode {
+  height: 20px;
+  width: 58px;
+  opacity: 0.75;
+  background: repeating-linear-gradient(90deg, #fff 0 2px, transparent 2px 4px, #fff 4px 5px, transparent 5px 8px, #fff 8px 11px, transparent 11px 13px);
+}
+
+/* ---------- Vé dạng hóa đơn (trang "Vé của tôi") ----------
+   .receipt        : bóng đổ bao quanh hình răng cưa
+   .receipt-paper  : giấy, mép trên và mép dưới cắt răng cưa bằng mask (conic-gradient) */
+.receipt {
+  --zig: 14px; /* bề rộng một răng cưa */
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.15)) drop-shadow(0 8px 14px rgb(0 0 0 / 0.08));
+}
+.receipt-paper {
+  background: #fffef8;
+  padding-block: var(--zig);
+  /* 3 lớp mask hợp lại: răng cưa mép trên (đỉnh hướng lên), phần thân đặc, răng cưa mép dưới (đỉnh hướng xuống) */
+  mask:
+    conic-gradient(from 135deg at 50% 0, #000 0 90deg, #0000 0) 0 0 / var(--zig) calc(var(--zig) / 2) repeat-x,
+    linear-gradient(#000 0 0) 0 calc(var(--zig) / 2) / 100% calc(100% - var(--zig)) no-repeat,
+    conic-gradient(from -45deg at 50% 100%, #000 0 90deg, #0000 0) 0 100% / var(--zig) calc(var(--zig) / 2) repeat-x;
+}
+.receipt-rule {
+  border-top: 2px dashed rgb(0 0 0 / 0.25);
+}
+.receipt-stamp {
+  transform: rotate(-9deg);
+  border: 3px double currentColor;
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  mix-blend-mode: multiply;
+}
