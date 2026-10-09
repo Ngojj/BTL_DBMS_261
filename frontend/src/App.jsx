@@ -1,8 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './layouts/MainLayout.jsx';
 import AdminLayout from './layouts/AdminLayout.jsx';
-import LabLayout from './layouts/LabLayout.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import LabPage from './components/LabPage.jsx';
+import { labConfigs } from './pages/lab/labConfigs.js';
 import EventListPage from './pages/EventListPage.jsx';
 import EventDetailPage from './pages/EventDetailPage.jsx';
 import WaitingRoomPage from './pages/WaitingRoomPage.jsx';
@@ -15,26 +16,22 @@ import AdminEventsPage from './pages/AdminEventsPage.jsx';
 import AdminZonesPage from './pages/AdminZonesPage.jsx';
 import AdminReportsPage from './pages/AdminReportsPage.jsx';
 import AdminSuspiciousPage from './pages/AdminSuspiciousPage.jsx';
-import DataStorageLabPage from './pages/lab/DataStorageLabPage.jsx';
-import IndexingLabPage from './pages/lab/IndexingLabPage.jsx';
-import QueryProcessingLabPage from './pages/lab/QueryProcessingLabPage.jsx';
-import TransactionLabPage from './pages/lab/TransactionLabPage.jsx';
-import ConcurrencyControlLabPage from './pages/lab/ConcurrencyControlLabPage.jsx';
-import BackupRecoveryLabPage from './pages/lab/BackupRecoveryLabPage.jsx';
 
 export default function App() {
   return (
     <Routes>
       <Route element={<MainLayout />}>
-          <Route path="/" element={<EventListPage />} />
-          <Route path="/events/:eventId" element={<EventDetailPage />} />
-          <Route path="/events/:eventId/waiting-room" element={<WaitingRoomPage />} />
-          <Route path="/checkout/:orderId" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
-          <Route path="/my-tickets" element={<ProtectedRoute><MyTicketsPage /></ProtectedRoute>} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/staff/checkin" element={<ProtectedRoute roles={['STAFF', 'ADMIN']}><CheckinPage /></ProtectedRoute>} />
+        <Route path="/" element={<EventListPage />} />
+        <Route path="/events/:eventId" element={<EventDetailPage />} />
+        <Route path="/events/:eventId/waiting-room" element={<WaitingRoomPage />} />
+        <Route path="/my-tickets" element={<ProtectedRoute><MyTicketsPage /></ProtectedRoute>} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
       </Route>
+
+      {/* Trang có giao diện riêng, không dùng MainLayout */}
+      <Route path="/checkout/:orderId" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
+      <Route path="/staff/checkin" element={<ProtectedRoute roles={['STAFF', 'ADMIN']}><CheckinPage /></ProtectedRoute>} />
 
       <Route path="/admin" element={<ProtectedRoute roles={['ADMIN']}><AdminLayout /></ProtectedRoute>}>
         <Route index element={<Navigate to="events" replace />} />
@@ -42,15 +39,10 @@ export default function App() {
         <Route path="zones" element={<AdminZonesPage />} />
         <Route path="reports" element={<AdminReportsPage />} />
         <Route path="suspicious" element={<AdminSuspiciousPage />} />
-        <Route path="labs" element={<LabLayout />}>
-          <Route index element={<Navigate to="data-storage" replace />} />
-          <Route path="data-storage" element={<DataStorageLabPage />} />
-          <Route path="indexing" element={<IndexingLabPage />} />
-          <Route path="query-processing" element={<QueryProcessingLabPage />} />
-          <Route path="transaction" element={<TransactionLabPage />} />
-          <Route path="concurrency-control" element={<ConcurrencyControlLabPage />} />
-          <Route path="backup-recovery" element={<BackupRecoveryLabPage />} />
-        </Route>
+        {Object.keys(labConfigs).map((topic) => (
+          <Route key={topic} path={'labs/' + topic} element={<LabPage topic={topic} />} />
+        ))}
+        <Route path="labs" element={<Navigate to="concurrency-control" replace />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

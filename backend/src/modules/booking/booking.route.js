@@ -14,4 +14,7 @@ router.post('/:orderId/cancel', authenticate, controller.cancelOrder);
 // [d] Đơn hàng của tôi
 router.get('/', authenticate, controller.listMyOrders);
 
+// [f] join: chi tiết một đơn (trang thanh toán) – trả { orderId, eventId, eventTitle, eventDate, venueName, city, status, total, expiresAt, items: [{ seatId, seatLabel, zone, price }] }
+router.get('/:orderId', authenticate, controller.getOrder);
+
 export default router;

@@ -175,7 +175,25 @@ Mở http://localhost:5173. Vite tự chuyển tiếp `/api` sang backend cổng
 node scripts/seed.js
 ```
 
-`seed.js` hiện còn là TODO của TV2. Trong lúc chờ, tạo tài khoản bằng trang đăng ký hoặc gọi `POST /api/auth/register` (tài khoản mới luôn là `CUSTOMER`; muốn ADMIN/STAFF thì sửa cột `role` trong bảng `users`).
+Script cần PostgreSQL và Firestore Emulator đang chạy, và **xóa sạch** dữ liệu cũ (TRUNCATE 10 bảng, xóa `events/`, `validTickets/`, `notifications/` trong Emulator) rồi sinh lại trong vài giây. Chạy lại bất cứ lúc nào, nhất là sau khi tắt Emulator (dữ liệu Emulator mất khi tắt).
+
+| Tùy chọn | Ý nghĩa |
+| --- | --- |
+| `--users 500` | Số khách hàng (mặc định 300) |
+| `--seed 7` | Hạt giống ngẫu nhiên; cùng seed cho cùng dữ liệu |
+| `--pg-only` | Chỉ PostgreSQL |
+| `--fs-only` | Chỉ dựng lại Firestore từ dữ liệu PostgreSQL hiện có (dùng khi vừa bật lại Emulator) |
+
+Dữ liệu sinh ra: 7 sự kiện (6 sắp diễn ra như mockup và 1 đã kết thúc), mỗi sự kiện 2 khu VIP/CAT 1 với 148 ghế, khoảng 380 vé đã bán, một số đơn hủy/hết hạn, vé đã soát và đánh giá cho sự kiện đã kết thúc. Sự kiện chưa đến giờ mở bán thì chưa có vé bán.
+
+| Vai trò | Email | Mật khẩu |
+| --- | --- | --- |
+| ADMIN | `admin@ticketrush.vn` | `Admin@123` |
+| STAFF | `staff1@ticketrush.vn`, `staff2@ticketrush.vn` | `Staff@123` |
+| CUSTOMER (demo, có 2 vé Rock B7 và B8 như mockup) | `khach@example.com` | `123456` |
+| CUSTOMER khác | email trong bảng `users` | `123456` |
+
+Dữ liệu để thử chức năng #11 (gom vé): `scalper@example.com` (16 vé ở nhiều sự kiện) và `acc.a`, `acc.b`, `acc.c` `@example.com` (3 tài khoản chung số điện thoại `0977123456`).
 
 ## 5. Các cổng dịch vụ
 
@@ -302,7 +320,7 @@ await withTransaction(async (client) => {
 | Module | Endpoint | Quyền |
 | --- | --- | --- |
 | health | `GET /health` | – |
-| auth | `POST /auth/register`, `/auth/login`, `/auth/firebase-token`; `GET /auth/me` | – / đăng nhập |
+| auth | `POST /auth/register`, `/auth/login`, `/auth/google`, `/auth/firebase-token`; `GET /auth/me` | – / đăng nhập |
 | events | `GET /events`, `/events/genres`, `/events/:id`; `POST`, `PUT`, `DELETE` | – / ADMIN |
 | zones | `GET`, `POST /events/:id/zones`; `PUT`, `DELETE /zones/:id`; `POST /zones/:id/generate-seats` | – / ADMIN |
 | booking | `POST /orders`, `/orders/:id/pay`, `/orders/:id/cancel`; `GET /orders` | đăng nhập |
@@ -315,13 +333,62 @@ await withTransaction(async (client) => {
 
 ## 10. Frontend chi tiết
 
-- **Router** trong `App.jsx`. Trang công khai dùng `MainLayout`, trang admin dùng `AdminLayout`, DBMS Lab lồng trong admin với `LabLayout` (thanh chọn 6 topic).
+Giao diện dựng theo file mockup `TicketRush – Mockup giao diện.pdf` (6 màn hình). Bảng màu và font khai báo trong `tailwind.config.js`; class dùng chung (`card`, `btn-brand`, `input`…) trong `src/index.css`.
+
+| Đường dẫn | File | Mockup |
+| --- | --- | --- |
+| `/` | `pages/EventListPage.jsx` | Sự kiện sắp diễn ra (chip thể loại, bộ lọc, thẻ sự kiện) |
+| `/events/:id` | `pages/EventDetailPage.jsx`, `lib/seats.js` | Sơ đồ ghế realtime + giỏ ghế |
+| `/checkout/:orderId` | `pages/CheckoutPage.jsx` | Thanh toán + đếm ngược giữ ghế 10 phút |
+| `/my-tickets` | `pages/MyTicketsPage.jsx` | Vé của tôi + mã QR (giao diện điện thoại, lưu offline) |
+| `/staff/checkin` | `pages/CheckinPage.jsx`, `components/QrScanner.jsx`, `lib/checkin.js` | Soát vé QR (giao diện tối, ngoại tuyến) |
+| `/admin/labs/<topic>` | `components/LabPage.jsx`, `pages/lab/labConfigs.js` | DBMS Lab (Concurrency control là bản mockup, 5 topic còn lại dùng chung khung) |
+| `/admin/events`, `zones` | `pages/AdminEventsPage.jsx`, `AdminZonesPage.jsx` | Chưa có mockup. Thêm, sửa, xóa; sinh ghế; nút **Đồng bộ** từng sự kiện và **Đồng bộ tất cả** sang Firestore (module `sync`) |
+| `/admin/reports`, `suspicious` | `pages/AdminReportsPage.jsx`, `AdminSuspiciousPage.jsx` | Chưa có mockup: bảng và thanh tiến độ đơn giản |
+| Khối đánh giá (cuối trang `/events/:id`) | `components/Reviews.jsx` | Điểm trung bình, danh sách, gửi đánh giá (mỗi người một lần) |
+| Chuông thông báo (header) | `components/NotificationBell.jsx`, `lib/notifications.js` | Đọc Firestore `notifications/{userId}/items`; trạng thái "đã xem" lưu cục bộ |
+| `/login`, `/register` | `pages/LoginPage.jsx`, `RegisterPage.jsx` | Chưa có mockup |
+
+**Dữ liệu mẫu (mock).** Khi backend chưa làm một API (trả `501 NOT_IMPLEMENTED`) hoặc backend không chạy, và `VITE_USE_MOCK=true` trong `frontend/.env`, frontend tự dùng dữ liệu mẫu trong `src/api/mock.js` để xem được giao diện và chạy thử luồng mua vé. Backend làm xong API nào thì trang đó **tự chuyển sang dữ liệu thật**, không cần sửa frontend. Hình dạng dữ liệu trong `mock.js` chính là hợp đồng mà API thật cần trả về (chi tiết ở [docs/api.md](docs/api.md)). DBMS Lab **không có** dữ liệu mẫu để số liệu giả không lọt vào báo cáo. Khi backend đã đủ, đặt `VITE_USE_MOCK=false`.
+
+**Chuông thông báo** cần đăng nhập Firebase bằng custom token (`AuthContext.connectFirebase`), mà backend chỉ cấp được token này khi có `serviceAccount.json` hoặc Auth Emulator. Khi chưa có thì chuông hiện dữ liệu mẫu (nếu bật `VITE_USE_MOCK`) hoặc trống; các phần khác không bị ảnh hưởng.
+
+**Kiểm thử giao diện bằng trình duyệt tự động:** nếu viết kịch bản (Puppeteer…) thì chạy trong một ngữ cảnh trình duyệt riêng (`browser.createBrowserContext()`). Trong ngữ cảnh mặc định, khung "Lưu mật khẩu?" của Chrome sau khi nhập email và mật khẩu sẽ giành focus nên chuột không tới được trang.
+
+**Xem thử các màn hình:** đăng ký tài khoản khách rồi chọn sự kiện để đi luồng mua vé. Muốn xem trang soát vé hoặc admin thì đổi cột `role` của tài khoản trong bảng `users` thành `STAFF` hoặc `ADMIN`.
+
+- **Router** trong `App.jsx`. Trang công khai dùng `MainLayout`, thanh toán và soát vé có giao diện riêng, trang admin dùng `AdminLayout` (thanh bên có sẵn 6 topic DBMS Lab).
 - **`ProtectedRoute`**: `<ProtectedRoute>` chỉ cần đăng nhập, `<ProtectedRoute roles={['ADMIN']}>` cần đúng role.
 - **`useAuth()`** trả về `{ user, loading, login, register, logout }`. JWT lưu trong `localStorage`.
 - **Gọi API**: dùng `api/client.js` (tự gắn JWT, ném `Error` có `message`, `code`, `status`). Đặt hàm gọi API theo module trong `src/api/`.
 - **Firestore realtime**: dùng `db` từ `lib/firebase.js`, ví dụ `onSnapshot(collection(db, 'events', eventId, 'seats'), …)`. Để đọc Firestore đúng quyền, đăng nhập Firebase bằng custom token từ `POST /api/auth/firebase-token` (TV5 làm trong `AuthContext`).
 - **Giao diện tiếng Việt**, Tailwind CSS v3. Tiền tệ VND hiển thị theo `Intl.NumberFormat('vi-VN')`, thời gian hiển thị giờ Việt Nam.
 - Quét QR dùng thư viện `html5-qrcode`.
+
+### Đăng nhập / đăng ký bằng Google
+
+Nút "Tiếp tục với Google" nằm ở trang đăng nhập và đăng ký (`components/GoogleAuth.jsx`), hai trang dùng chung một luồng: có tài khoản thì đăng nhập, chưa có thì tạo.
+
+1. Frontend mở popup Google bằng **Firebase Auth** (`lib/firebase.js` → `pickGoogleAccount`) và lấy Firebase ID token.
+2. Gửi `POST /api/auth/google { idToken, phone? }`. Backend (`auth.service.js` → `googleLogin`) xác minh token bằng Admin SDK, chỉ nhận nhà cung cấp `google.com` và email đã xác minh.
+3. Email đã có trong `users`: đăng nhập vào tài khoản đó, giữ nguyên role. Email mới: tạo `CUSTOMER`. Bảng `users` bắt buộc có `phone` nên lần đầu backend trả `409 PHONE_REQUIRED`, frontend hỏi số điện thoại rồi gọi lại kèm `phone`.
+4. Backend cấp JWT của TicketRush như đăng nhập thường; mọi phần còn lại của ứng dụng không đổi. Tài khoản tạo bằng Google có mật khẩu ngẫu nhiên nên chỉ vào được bằng Google.
+
+**Khi dev (Auth Emulator):** popup là trang giả lập của Emulator, không phải Google thật. Bấm **Add new account**, chọn **Auto-generate user information**, rồi **Sign in with Google.com**. Cần Emulator đang chạy (`firebase emulators:start`).
+
+**Khi dùng tài khoản Google thật** (cần một dự án Firebase của riêng bạn, miễn phí, không cần thẻ):
+
+1. Vào [Firebase Console](https://console.firebase.google.com) → **Add project** → đặt tên, tắt Google Analytics. Ghi lại **Project ID**.
+2. **Build → Authentication → Get started → Sign-in method → Google → Enable**, chọn email hỗ trợ, **Save**. (`localhost` đã nằm sẵn trong Authorized domains; khi deploy thì thêm tên miền thật vào đó.)
+3. **Project settings (bánh răng) → General → Your apps → biểu tượng Web `</>`**, đăng ký ứng dụng và chép `apiKey`, `authDomain`, `projectId` trong `firebaseConfig`. (`apiKey` của web không phải bí mật.)
+4. `frontend/.env`: đặt `VITE_USE_AUTH_EMULATOR=false` và điền `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`. Giữ `VITE_USE_EMULATOR=true` nếu muốn Firestore vẫn chạy Emulator với dữ liệu seed.
+5. `backend/.env`: đặt `FIREBASE_PROJECT_ID` cùng ID trên và **xóa hoặc comment dòng `FIREBASE_AUTH_EMULATOR_HOST`**. Xác minh đăng nhập Google chỉ cần Project ID, không cần khóa bí mật.
+6. Emulator Firestore chạy ở chế độ một dự án, nên khởi động lại với cùng ID: `firebase emulators:start --config firebase/firebase.json --project <PROJECT_ID>`, rồi nạp lại Firestore: `node scripts/seed.js --fs-only`.
+7. Khởi động lại backend và frontend (Vite chỉ đọc `.env` lúc khởi động).
+
+Chỉ cần thêm `serviceAccount.json` (Project settings → Service accounts → Generate new private key, **không commit**, đặt `GOOGLE_APPLICATION_CREDENTIALS` trỏ tới nó) nếu dùng tính năng cần cấp Firebase custom token, tức là trang **soát vé của STAFF** đọc/ghi Firestore theo Security Rules. Đăng nhập Google và mua vé không cần.
+
+Lưu ý bảo mật: email Google trùng với tài khoản có sẵn (kể cả ADMIN/STAFF) sẽ đăng nhập được vào tài khoản đó, vì Google đã xác minh chủ sở hữu email.
 
 ## 11. Dữ liệu: PostgreSQL và Firestore
 

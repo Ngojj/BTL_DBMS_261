@@ -23,3 +23,8 @@ export async function cancelOrder(input) {
 export async function listMyOrders(input) {
   throw notImplemented('booking.listMyOrders');
 }
+// [f] join orders + tickets + seats + zones + events
+export async function getOrder(input) {
+  throw notImplemented('booking.getOrder');
+}
+
