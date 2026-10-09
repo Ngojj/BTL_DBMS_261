@@ -182,18 +182,53 @@ export function mockCheckin(qr, eventId) {
 }
 
 // ---------- Báo cáo ----------
-export const revenue = () => [
-  { eventTitle: 'Đêm nhạc Rock Quân khu 7', zone: 'VIP', ticketsSold: 38, revenue: 57000000 },
-  { eventTitle: 'Đêm nhạc Rock Quân khu 7', zone: 'CAT 1', ticketsSold: 71, revenue: 46150000 },
-  { eventTitle: 'Lễ hội EDM Bên Sông', zone: 'VIP', ticketsSold: 30, revenue: 82800000 },
-  { eventTitle: 'Lễ hội EDM Bên Sông', zone: 'CAT 1', ticketsSold: 64, revenue: 76800000 },
+const revRows = [
+  { eventId: '2', eventTitle: 'Đêm nhạc Rock Quân khu 7', zone: 'VIP', ticketsSold: 38, revenue: 57000000 },
+  { eventId: '2', eventTitle: 'Đêm nhạc Rock Quân khu 7', zone: 'CAT 1', ticketsSold: 71, revenue: 46150000 },
+  { eventId: '3', eventTitle: 'Lễ hội EDM Bên Sông', zone: 'VIP', ticketsSold: 30, revenue: 82800000 },
+  { eventId: '3', eventTitle: 'Lễ hội EDM Bên Sông', zone: 'CAT 1', ticketsSold: 64, revenue: 76800000 },
 ];
-export const occupancy = () => [
-  { eventTitle: 'Đêm nhạc Rock Quân khu 7', zone: 'VIP', capacity: 48, sold: 38 },
-  { eventTitle: 'Đêm nhạc Rock Quân khu 7', zone: 'CAT 1', capacity: 100, sold: 71 },
-  { eventTitle: 'Lễ hội EDM Bên Sông', zone: 'VIP', capacity: 48, sold: 30 },
-  { eventTitle: 'Lễ hội EDM Bên Sông', zone: 'CAT 1', capacity: 100, sold: 64 },
-];
+const occRows = [
+  { eventId: '2', eventTitle: 'Đêm nhạc Rock Quân khu 7', zone: 'VIP', capacity: 48, sold: 38, held: 2 },
+  { eventId: '2', eventTitle: 'Đêm nhạc Rock Quân khu 7', zone: 'CAT 1', capacity: 100, sold: 71, held: 4 },
+  { eventId: '3', eventTitle: 'Lễ hội EDM Bên Sông', zone: 'VIP', capacity: 48, sold: 30, held: 0 },
+  { eventId: '3', eventTitle: 'Lễ hội EDM Bên Sông', zone: 'CAT 1', capacity: 100, sold: 64, held: 1 },
+].map((o) => ({ ...o, rate: Math.round((o.sold / o.capacity) * 1000) / 10 }));
+const byEventId = (q) => (r) => !q?.eventId || String(r.eventId) === String(q.eventId);
+export const revenue = (q) => revRows.filter(byEventId(q));
+export const occupancy = (q) => occRows.filter(byEventId(q));
+export function revenueDaily(q = {}) {
+  const to = q.to ? new Date(q.to + 'T00:00:00Z') : new Date();
+  const from = q.from ? new Date(q.from + 'T00:00:00Z') : new Date(to.getTime() - 29 * 86400e3);
+  const r = rng(5);
+  const out = [];
+  for (let d = new Date(from); d <= to; d = new Date(d.getTime() + 86400e3)) {
+    const orders = r() < 0.2 ? 0 : Math.floor(r() * 8);
+    out.push({ day: d.toISOString().slice(0, 10), orders, tickets: orders * 2, revenue: orders * 2 * 1100000 });
+  }
+  return out;
+}
+export function overview(q) {
+  const rows = revenue(q);
+  const occ = occupancy(q);
+  const total = rows.reduce((s, r) => s + r.revenue, 0);
+  const tickets = rows.reduce((s, r) => s + r.ticketsSold, 0);
+  const cap = occ.reduce((s, o) => s + o.capacity, 0);
+  const sold = occ.reduce((s, o) => s + o.sold, 0);
+  const perEvent = Object.values(rows.reduce((acc, r) => {
+    const e = (acc[r.eventId] ??= { eventId: r.eventId, title: r.eventTitle, revenue: 0, tickets: 0 });
+    e.revenue += r.revenue; e.tickets += r.ticketsSold;
+    return acc;
+  }, {}));
+  const avg = perEvent.length ? total / perEvent.length : 0;
+  return {
+    revenue: total, ticketsSold: tickets, paidOrders: Math.round(tickets / 2.4), avgOrderValue: tickets ? Math.round(total / (tickets / 2.4)) : 0,
+    avgTicketPrice: tickets ? Math.round(total / tickets) : 0, orders: { paid: Math.round(tickets / 2.4), cancelled: 10, expired: 5, pending: 0 },
+    cancelRate: 5.9, seatCapacity: cap, seatsSold: sold, occupancyRate: cap ? Math.round((sold / cap) * 1000) / 10 : 0,
+    checkedIn: Math.round(tickets * 0.2), checkInRate: 20,
+    topEvents: perEvent.sort((a, b) => b.revenue - a.revenue).map((e) => ({ ...e, share: total ? Math.round((e.revenue / total) * 1000) / 10 : 0, aboveAverage: e.revenue > avg })),
+  };
+}
 export const suspicious = () => [
   { userId: '12', email: 'bulk.buyer@example.com', phone: '0901234567', reason: 'Vượt giới hạn vé / sự kiện', ticketCount: 9 },
   { userId: '31', email: 'acc.one@example.com', phone: '0988000111', reason: '3 tài khoản chung số điện thoại', ticketCount: 4 },

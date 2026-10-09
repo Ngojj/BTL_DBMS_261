@@ -344,7 +344,8 @@ Giao diện dựng theo file mockup `TicketRush – Mockup giao diện.pdf` (6 m
 | `/staff/checkin` | `pages/CheckinPage.jsx`, `components/QrScanner.jsx`, `lib/checkin.js` | Soát vé QR (giao diện tối, ngoại tuyến) |
 | `/admin/labs/<topic>` | `components/LabPage.jsx`, `pages/lab/labConfigs.js` | DBMS Lab (Concurrency control là bản mockup, 5 topic còn lại dùng chung khung) |
 | `/admin/events`, `zones` | `pages/AdminEventsPage.jsx`, `AdminZonesPage.jsx` | Chưa có mockup. Thêm, sửa, xóa; sinh ghế; nút **Đồng bộ** từng sự kiện và **Đồng bộ tất cả** sang Firestore (module `sync`) |
-| `/admin/reports`, `suspicious` | `pages/AdminReportsPage.jsx`, `AdminSuspiciousPage.jsx` | Chưa có mockup: bảng và thanh tiến độ đơn giản |
+| `/admin/reports` | `pages/AdminReportsPage.jsx`, `components/RevenueChart.jsx` | Thống kê kinh doanh (#10): 6 chỉ số, biểu đồ doanh thu theo ngày, top sự kiện, lấp đầy, bảng theo khu vực; lọc theo sự kiện và khoảng ngày. Backend `modules/reports` đã hiện thực |
+| `/admin/suspicious` | `pages/AdminSuspiciousPage.jsx` | Chưa có mockup; backend (#11) chưa hiện thực |
 | Khối đánh giá (cuối trang `/events/:id`) | `components/Reviews.jsx` | Điểm trung bình, danh sách, gửi đánh giá (mỗi người một lần) |
 | Chuông thông báo (header) | `components/NotificationBell.jsx`, `lib/notifications.js` | Đọc Firestore `notifications/{userId}/items`; trạng thái "đã xem" lưu cục bộ |
 | `/login`, `/register` | `pages/LoginPage.jsx`, `RegisterPage.jsx` | Chưa có mockup |
