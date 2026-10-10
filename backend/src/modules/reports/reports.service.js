@@ -25,7 +25,15 @@ export async function occupancyByZone(input) {
   return repo.occupancyByZone(reportFilters(input));
 }
 
-// TODO [g] #11 – tài khoản gom vé: vượt giới hạn / chung số điện thoại (subquery)
+// [g] #11 – tài khoản gom vé: vượt giới hạn / chung số điện thoại (subquery)
 export async function suspiciousAccounts(input) {
-  return repo.suspiciousAccounts(input);
+  const rows = await repo.suspiciousAccounts(input);
+  return rows.map((row) => {
+    const reasons = row.exceededEvents.map((event) =>
+      `Vượt giới hạn tại ${event.eventTitle}: ${event.ticketCount}/${event.limit} vé`);
+    if (row.sharedPhoneAccounts > 1) {
+      reasons.push(`${row.sharedPhoneAccounts} tài khoản khách hàng dùng chung số điện thoại`);
+    }
+    return { ...row, reason: reasons.join('; ') };
+  });
 }
