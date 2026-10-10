@@ -1,4 +1,4 @@
-// TODO [reports.route] Phụ trách: TV3 (#10, #11)
+// Phụ trách: TV3 (#10, #11)
 import { Router } from 'express';
 import * as controller from './reports.controller.js';
 import { authenticate, authorize } from '../../middleware/auth.js';

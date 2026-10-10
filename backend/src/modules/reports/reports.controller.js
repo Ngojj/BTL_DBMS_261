@@ -1,4 +1,4 @@
-// TODO [reports.controller] Phụ trách: TV3 (#10, #11)
+// Phụ trách: TV3 (#10, #11)
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import * as service from './reports.service.js';
 
