@@ -51,7 +51,6 @@ export async function listEvents({ query = {} }) {
 }
 
 // [d] Chi tiết sự kiện + các khu vực
-// [d] Chi tiết sự kiện + các khu vực
 export async function getEvent({ params }) {
   const { eventId } = params;
 
@@ -101,16 +100,116 @@ export async function getEvent({ params }) {
 }
 
 // [a] #8 – thêm sự kiện
-export async function createEvent(input) {
-  throw notImplemented('events.createEvent');
+export async function createEvent({ body }) {
+  const {
+    title,
+    genreId,
+    venueId,
+    eventDate,
+    saleOpenAt,
+    maxTicketsPerUser = 4,
+    status = 'DRAFT',
+  } = body;
+
+  const { rows } = await pool.query(
+    `
+      INSERT INTO events (
+        title,
+        genre_id,
+        venue_id,
+        event_date,
+        sale_open_at,
+        max_tickets_per_user,
+        status
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING
+        event_id AS "eventId",
+        title,
+        genre_id AS "genreId",
+        venue_id AS "venueId",
+        event_date AS "eventDate",
+        sale_open_at AS "saleOpenAt",
+        max_tickets_per_user AS "maxTicketsPerUser",
+        status,
+        created_at AS "createdAt"
+    `,
+    [
+      title,
+      genreId,
+      venueId,
+      eventDate,
+      saleOpenAt,
+      maxTicketsPerUser,
+      status,
+    ],
+  );
+
+  return rows[0];
 }
 
 // [c] #8 – sửa sự kiện
-export async function updateEvent(input) {
-  throw notImplemented('events.updateEvent');
+export async function updateEvent({ params, body }) {
+  const { eventId } = params;
+
+  const {
+    title,
+    genreId,
+    venueId,
+    eventDate,
+    saleOpenAt,
+    maxTicketsPerUser,
+    status,
+  } = body;
+
+  const { rows } = await pool.query(
+    `
+      UPDATE events
+      SET
+        title = $2,
+        genre_id = $3,
+        venue_id = $4,
+        event_date = $5,
+        sale_open_at = $6,
+        max_tickets_per_user = $7,
+        status = $8
+      WHERE event_id = $1
+      RETURNING
+        event_id AS "eventId",
+        title,
+        genre_id AS "genreId",
+        venue_id AS "venueId",
+        event_date AS "eventDate",
+        sale_open_at AS "saleOpenAt",
+        max_tickets_per_user AS "maxTicketsPerUser",
+        status,
+        created_at AS "createdAt"
+    `,
+    [
+      eventId,
+      title,
+      genreId,
+      venueId,
+      eventDate,
+      saleOpenAt,
+      maxTicketsPerUser,
+      status,
+    ],
+  );
+
+  return rows[0] ?? null;
 }
 
 // [b] #8 – xóa sự kiện
-export async function deleteEvent(input) {
-  throw notImplemented('events.deleteEvent');
+export async function deleteEvent({ params }) {
+  const { rows } = await pool.query(
+    `
+      DELETE FROM events
+      WHERE event_id = $1
+      RETURNING event_id AS "eventId", title
+    `,
+    [params.eventId],
+  );
+
+  return rows[0] ?? null;
 }
