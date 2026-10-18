@@ -1,15 +1,13 @@
-// TODO [events.service] Phụ trách: TV1 (#1, #8) + TV2 (#2)
+//[events.service] Phụ trách: TV1 (#1, #8) + TV2 (#2)
 import * as repo from './events.repository.js';
 import { AppError } from '../../utils/AppError.js';
 
 // Nghiệp vụ + điều phối transaction. Không viết SQL ở đây (SQL nằm trong repository).
 
-// TODO [d] #1 – danh sách thể loại
 export async function listGenres(input) {
   return repo.listGenres(input);
 }
 
-// TODO [d,e] #1 lọc theo thể loại [d]; #2 lọc thành phố + khoảng ngày + khoảng giá [e]
 export async function listEvents(input) {
   const query = { ...input.query };
 
@@ -40,7 +38,6 @@ export async function listEvents(input) {
   return repo.listEvents({ ...input, query });
 }
 
-// TODO [d] Chi tiết sự kiện + các khu vực
 export async function getEvent(input) {
   const eventId = input.params.eventId;
 
@@ -77,7 +74,6 @@ export async function getEvent(input) {
   return event;
 }
 
-// TODO [a] #8 – thêm sự kiện
 function validateEventBody(body = {}) {
   if (body === null || typeof body !== 'object' || Array.isArray(body)) {
     throw new AppError(400, 'VALIDATION', 'Dữ liệu sự kiện không hợp lệ');
@@ -192,7 +188,6 @@ export async function createEvent({ body }) {
   }
 }
 
-// TODO [c] #8 – sửa sự kiện
 export async function updateEvent({ params, body }) {
   const eventId = params.eventId;
 
@@ -244,7 +239,6 @@ export async function updateEvent({ params, body }) {
   }
 }
 
-// TODO [b] #8 – xóa sự kiện
 export async function deleteEvent({ params }) {
   const eventId = params.eventId;
 
