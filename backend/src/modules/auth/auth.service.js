@@ -1,7 +1,6 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/env.js';
-import { firebaseAuth } from '../../config/firebase.js';
 import { AppError } from '../../utils/AppError.js';
 import * as repo from './auth.repository.js';
 
@@ -32,8 +31,4 @@ export async function me(userId) {
   const user = await repo.findById(userId);
   if (!user) throw new AppError(404, 'NOT_FOUND', 'Không tìm thấy người dùng');
   return publicUser(user);
-}
-
-export async function firebaseToken({ userId, role }) {
-  return { token: await firebaseAuth().createCustomToken(String(userId), { role }) };
 }

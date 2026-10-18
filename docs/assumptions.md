@@ -1,8 +1,7 @@
-# Giả định khi dựng khung
+# Giả định mốc tuần 42
 
-1. `schema.sql` được chuyển vào `database/schema.sql` (đúng vị trí brief nêu).
-2. Chức năng đánh giá (`reviews`) chưa có người phụ trách trong brief → tạm giao TV1.
-3. Firestore Security Rules cần `request.auth.token.role` → backend cấp Firebase custom token (claim `role`) qua `POST /api/auth/firebase-token`; uid = `String(user_id)`.
-4. Kết quả DBMS Lab lưu dưới dạng file JSON trong `backend/lab-results/<topic>/` (không tạo bảng `lab_runs`).
-5. `auth` được hiện thực sẵn (đăng ký/đăng nhập/JWT) vì mọi module khác phụ thuộc; các module còn lại là placeholder trả 501 `NOT_IMPLEMENTED`.
-6. Cổng: backend 4000, frontend 5173, PostgreSQL 5433 (Docker; 5432 hay bị PostgreSQL cài sẵn trên máy chiếm), Firestore Emulator 8085, Auth Emulator 9099, Emulator UI 4001.
+- PostgreSQL là nguồn dữ liệu cho toàn bộ giao dịch mua/hủy.
+- Thanh toán chỉ giả lập; hủy order đã PAID ghi `payments.status = REFUNDED`, không kết nối cổng thanh toán thật.
+- Một thao tác hủy áp dụng cho toàn bộ order, không hủy riêng từng ghế trong order nhiều vé.
+- `database/schema.sql` là DDL chuẩn của project nhưng có lệnh DROP; chỉ dùng trên database mới hoặc nơi có thể xóa dữ liệu.
+- Firestore realtime/offline, custom Firebase Auth, vé QR/check-in, báo cáo, reviews, waiting room và DBMS Lab chưa thuộc mốc này.

@@ -1,17 +1,11 @@
-# Kiến trúc TicketRush
+# Kiến trúc mốc tuần 42
 
-```
-[React app] --REST/JSON--> [Express API] --SQL--> [PostgreSQL]  (nguồn dữ liệu chính)
-     |                           |
-     |                           +--Admin SDK--> [Firestore]    (bản sao phục vụ realtime/offline)
-     +--Web SDK (chỉ đọc/lắng nghe)--> [Firestore]
+```text
+[React + Vite] --REST/JSON--> [Express API] --SQL + transaction--> [PostgreSQL]
 ```
 
-Backend: **Route → Controller → Service → Repository** (thư mục `backend/src/modules/<tên>/`).
+Frontend dùng API client để đăng ký/đăng nhập, xem event/zone/seat và tạo đơn. Backend theo cấu trúc **Route → Controller → Service → Repository**; SQL viết bằng `pg`, không dùng ORM. PostgreSQL là nguồn dữ liệu duy nhất của luồng mua/hủy tại mốc này.
 
-- Route: khai báo endpoint + middleware (`authenticate`, `authorize`).
-- Controller: đọc request, gọi service, trả JSON.
-- Service: nghiệp vụ, điều phối transaction, gọi `sync.publisher` sau COMMIT.
-- Repository: SQL thuần (pg) hoặc thao tác Firestore. Repository của DBMS Lab tách riêng: `labs/<topic>/{postgres,firestore}.js`.
+Mua vé khóa user trước khi kiểm tra giới hạn, khóa ghế theo thứ tự ID và tạo order/ticket/hold trong một transaction. Thanh toán giả lập và hủy/ghi nhận refund cũng dùng transaction riêng. Firestore client realtime/offline chưa được nối vào UI trong mốc tuần 42.
 
-Nguyên tắc: PostgreSQL là source of truth; Firestore là bản sao; frontend không ghi nghiệp vụ trực tiếp vào Firestore (trừ `checkedIn` của STAFF).
+Các route hiện tại gồm health, auth, đọc events/zones/seats và booking. Xem [docs/api.md](api.md).

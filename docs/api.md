@@ -1,19 +1,20 @@
-# API (tiền tố /api)
+# API TV4
 
-Lỗi: `{ "error": { "code", "message" } }`. Xác thực: `Authorization: Bearer <jwt>`.
+Prefix `/api`; lỗi có dạng `{ "error": { "code", "message" } }`. JWT truyền qua `Authorization: Bearer <token>`.
 
-| Module | Endpoint | Quyền |
-| --- | --- | --- |
-| health | GET /health | – |
-| auth | POST /auth/register, /auth/login, /auth/firebase-token; GET /auth/me | – / đăng nhập |
-| events | GET /events, /events/genres, /events/:id; POST, PUT, DELETE (admin) | – / ADMIN |
-| zones | GET,POST /events/:id/zones; PUT,DELETE /zones/:id; POST /zones/:id/generate-seats | – / ADMIN |
-| booking | POST /orders; POST /orders/:id/pay, /orders/:id/cancel; GET /orders | CUSTOMER |
-| tickets | GET /tickets/mine | CUSTOMER |
-| checkin | GET /checkin/events/:id/valid-tickets; POST /checkin/sync | STAFF |
-| reports | GET /admin/reports/revenue, /occupancy, /suspicious-accounts | ADMIN |
-| reviews | GET,POST /events/:id/reviews; GET /events/:id/reviews/summary | – / CUSTOMER |
-| sync | POST /admin/sync/events/:id, /admin/sync/all | ADMIN |
-| labs | POST /admin/labs/<topic>/run; GET /admin/labs/<topic>/runs | ADMIN |
+| Method | Endpoint | Quyền | Mục đích |
+| --- | --- | --- | --- |
+| GET | `/health` | Công khai | PostgreSQL/Firestore health |
+| POST | `/auth/register` | Công khai | Tạo CUSTOMER |
+| POST | `/auth/login` | Công khai | Đăng nhập, cấp JWT |
+| GET | `/auth/me` | Đăng nhập | Profile hiện tại |
+| GET | `/events` | Công khai | Sự kiện `ON_SALE`/`SOLD_OUT` |
+| GET | `/events/:eventId` | Công khai | Chi tiết sự kiện và khu vực |
+| GET | `/events/:eventId/zones` | Công khai | Giá/sức chứa khu vực |
+| GET | `/zones/:zoneId/seats` | Công khai | Ghế, trạng thái và giá |
+| POST | `/orders` | CUSTOMER | Tạo order, ticket và giữ ghế |
+| GET | `/orders` | CUSTOMER | Đơn của khách hiện tại |
+| POST | `/orders/:orderId/pay` | CUSTOMER | Thanh toán giả lập |
+| POST | `/orders/:orderId/cancel` | CUSTOMER | Hủy order/ghi nhận hoàn tiền |
 
-Topic: data-storage, indexing, query-processing, transaction, concurrency-control, backup-recovery.
+`POST /orders` body: `{ "eventId": "1", "seatIds": ["12", "13"] }`. Hủy vé được thực hiện ở cấp order; mọi vé của order sẽ bị hủy.

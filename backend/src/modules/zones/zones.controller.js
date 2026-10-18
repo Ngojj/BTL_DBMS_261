@@ -9,18 +9,6 @@ export const listZones = asyncHandler(async (req, res) => {
   res.json(await service.listZones(input(req)));
 });
 
-export const createZone = asyncHandler(async (req, res) => {
-  res.json(await service.createZone(input(req)));
-});
-
-export const updateZone = asyncHandler(async (req, res) => {
-  res.json(await service.updateZone(input(req)));
-});
-
-export const deleteZone = asyncHandler(async (req, res) => {
-  res.json(await service.deleteZone(input(req)));
-});
-
-export const generateSeats = asyncHandler(async (req, res) => {
-  res.json(await service.generateSeats(input(req)));
+export const listSeats = asyncHandler(async (req, res) => {
+  res.json(await service.listSeats(input(req)));
 });

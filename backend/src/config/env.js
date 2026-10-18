@@ -17,6 +17,5 @@ export const env = {
   // Có FIRESTORE_EMULATOR_HOST thì Admin SDK tự trỏ vào Emulator
   firestoreEmulatorHost: process.env.FIRESTORE_EMULATOR_HOST,
   googleApplicationCredentials: process.env.GOOGLE_APPLICATION_CREDENTIALS, // chỉ khi dùng Firebase thật
-  labResultsDir: process.env.LAB_RESULTS_DIR ?? './lab-results',
   holdMinutes: Number(process.env.SEAT_HOLD_MINUTES ?? 10),
 };

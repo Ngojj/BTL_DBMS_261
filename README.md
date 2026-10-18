@@ -1,439 +1,50 @@
-# TicketRush
+# TicketRush · Phần TV4
 
-Nền tảng bán vé concert chịu tải "giờ G" mở bán: hàng nghìn người mua cùng lúc mà không bán trùng ghế, không trừ tiền sai, vẫn soát vé được khi mạng yếu.
+Phạm vi trong nhánh này: **Data Storage, mua/hủy vé, ERD và script tạo bảng**. Triển khai dừng ở tuần 42; không gồm DBMS Lab, realtime/offline, QR/check-in, báo cáo, waiting room hay admin modules của thành viên khác.
 
-Đây là **Bài tập lớn môn Hệ quản trị cơ sở dữ liệu (HK261)** – nhóm 5 sinh viên. Đề tài so sánh **PostgreSQL** và **Cloud Firestore (Standard)** trên 6 topic: Data storage, Indexing, Query processing, Transaction, Concurrency control, Backup & recovery. Ứng dụng web có module **DBMS Lab** để chạy thí nghiệm so sánh ngay trong giao diện.
+## Công nghệ
 
-> Đọc [brief.md](brief.md) để hiểu đầy đủ đề bài, chức năng, phân công. README này hướng dẫn **cài đặt, chạy và làm việc trong repo**.
+- React + Vite frontend.
+- Node.js/Express backend, JWT, SQL thuần qua `pg`.
+- PostgreSQL 16 làm nguồn dữ liệu giao dịch; Firebase Admin/Firestore chỉ có trong hạ tầng đề tài, không tham gia quyết định mua/hủy ở mốc này.
 
-## Mục lục
+## Chạy local
 
-1. [Kiến trúc trong 1 phút](#1-kiến-trúc-trong-1-phút)
-2. [Cấu trúc thư mục](#2-cấu-trúc-thư-mục)
-3. [Yêu cầu cài đặt](#3-yêu-cầu-cài-đặt)
-4. [Chạy dự án từng bước](#4-chạy-dự-án-từng-bước)
-5. [Các cổng dịch vụ](#5-các-cổng-dịch-vụ)
-6. [Tình trạng hiện tại](#6-tình-trạng-hiện-tại)
-7. [Phân công và file của từng người](#7-phân-công-và-file-của-từng-người)
-8. [Cách thêm một chức năng](#8-cách-thêm-một-chức-năng)
-9. [Backend chi tiết](#9-backend-chi-tiết)
-10. [Frontend chi tiết](#10-frontend-chi-tiết)
-11. [Dữ liệu: PostgreSQL và Firestore](#11-dữ-liệu-postgresql-và-firestore)
-12. [DBMS Lab](#12-dbms-lab)
-13. [Quy ước làm việc](#13-quy-ước-làm-việc)
-14. [Xử lý sự cố thường gặp](#14-xử-lý-sự-cố-thường-gặp)
-
----
-
-## 1. Kiến trúc trong 1 phút
-
-```
-[React app] --REST/JSON--> [Express API] --SQL--> [PostgreSQL]  (nguồn dữ liệu chính)
-     |                           |
-     |                           +--Admin SDK--> [Firestore]    (bản sao phục vụ realtime/offline)
-     +--Web SDK (chỉ đọc/lắng nghe)--> [Firestore]
-```
-
-Năm nguyên tắc **bắt buộc** (chi tiết ở brief mục 4):
-
-1. **PostgreSQL là source of truth.** Mọi quyết định bán ghế, thu tiền chốt trong transaction PostgreSQL.
-2. **Firestore chỉ là bản sao** cho: sơ đồ ghế realtime, phòng chờ ảo, danh sách vé hợp lệ cho cổng soát vé (offline), thông báo.
-3. **Frontend không ghi nghiệp vụ vào Firestore.** Mọi thao tác ghi đi qua API. Ngoại lệ duy nhất: trang soát vé ghi `checkedIn` vào `validTickets` (để chạy offline), backend đồng bộ ngược về PostgreSQL.
-4. Sau khi transaction PostgreSQL **COMMIT**, backend đồng bộ sang Firestore (`sync`). Ghi Firestore lỗi thì retry; admin có endpoint đồng bộ lại toàn bộ.
-5. Repository tách riêng từng DBMS để DBMS Lab chạy **cùng một nghiệp vụ trên hai DBMS**.
-
-Ba vai trò người dùng: `CUSTOMER` (mua vé), `ADMIN` (quản lý, thống kê, DBMS Lab), `STAFF` (soát vé QR).
-
-## 2. Cấu trúc thư mục
-
-```
-BTL_DBMS/
-├── brief.md                 Đề bài + yêu cầu (đọc trước)
-├── docker-compose.yml       PostgreSQL 16 (cổng 5433), tự nạp schema
-├── package.json             Script tiện dụng ở gốc
-├── backend/                 Express API
-│   ├── .env.example
-│   ├── tests/
-│   └── src/
-│       ├── server.js, app.js
-│       ├── config/          env.js, pg.js (pool + withTransaction), firebase.js (Admin SDK)
-│       ├── middleware/      auth.js (authenticate, authorize), errorHandler.js
-│       ├── utils/           AppError.js, asyncHandler.js
-│       ├── routes/          index.js (gắn mọi module), health.js
-│       ├── modules/         Mỗi module: route → controller → service → repository
-│       │   ├── auth/        (đã hiện thực)
-│       │   ├── events/  zones/  booking/  tickets/
-│       │   └── checkin/  reports/  reviews/  sync/
-│       └── labs/            DBMS Lab: 6 topic + labRunner.js
-├── frontend/                React + Vite + Tailwind
-│   └── src/
-│       ├── main.jsx, App.jsx        Router + danh sách trang
-│       ├── layouts/                 MainLayout, AdminLayout, LabLayout
-│       ├── pages/                   Mỗi trang một file; pages/lab/ cho 6 trang Lab
-│       ├── components/              ProtectedRoute, lab/LabPage, lab/LabResultTable
-│       ├── context/AuthContext.jsx  Đăng nhập/đăng xuất, lưu user
-│       ├── api/                     client.js + authApi, eventsApi, bookingApi, adminApi, labsApi
-│       └── lib/firebase.js          Firebase Web SDK (+ Emulator, cache offline)
-├── database/
-│   ├── schema.sql           Schema PostgreSQL (10 bảng) – nguồn duy nhất của schema
-│   └── migrations/          Thay đổi schema về sau (YYYYMMDD_mota.sql)
-├── firebase/                firebase.json, firestore.rules, firestore.indexes.json
-├── scripts/                 seed.js (dữ liệu mẫu), load-test.js (giả lập tải), backup/
-└── docs/                    architecture.md, api.md, assumptions.md, erd/
-```
-
-## 3. Yêu cầu cài đặt
-
-| Công cụ | Phiên bản | Ghi chú |
-| --- | --- | --- |
-| Node.js | ≥ 20 (LTS) | `node -v` |
-| PostgreSQL | 16 | Chọn **một** trong hai: Docker (khuyến nghị) hoặc PostgreSQL cài sẵn (pgAdmin) |
-| Docker Desktop | mới | Chỉ cần nếu chạy PostgreSQL bằng Docker |
-| Java | ≥ 11 | Firestore Emulator cần Java. Kiểm tra: `java -version` |
-| Firebase CLI | mới | `npm i -g firebase-tools`, kiểm tra `firebase --version` |
-
-## 4. Chạy dự án từng bước
-
-Cần **4 thứ chạy song song**: PostgreSQL, Firestore Emulator, backend, frontend. Mỗi thứ (trừ PostgreSQL Docker) dùng một terminal riêng.
-
-### Bước 1 – Cài thư viện
-
-```bash
-npm --prefix backend install
-npm --prefix frontend install
-```
-
-### Bước 2 – Tạo file môi trường
+Cần Node.js 20+, Docker Desktop. Tạo file môi trường từ ví dụ:
 
 ```bash
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 ```
 
-Mở `backend/.env`, **đổi `JWT_SECRET`** thành chuỗi bí mật dài bất kỳ. **Không commit `.env`** (đã có trong `.gitignore`).
-
-### Bước 3 – PostgreSQL (chọn một cách)
-
-**Cách A – Docker (khuyến nghị, mọi người dùng cùng cấu hình):**
+Đổi `JWT_SECRET` trong `backend/.env`, rồi cài dependency và bật PostgreSQL:
 
 ```bash
-docker compose up -d
+npm --prefix backend install
+npm --prefix frontend install
+docker compose up -d postgres
 ```
 
-Container `ticketrush-postgres`, cổng **5433**, user/mật khẩu/database đều là `ticketrush`. File `database/schema.sql` tự nạp ở lần khởi tạo đầu. `backend/.env.example` đã khớp cấu hình này nên không cần sửa `DATABASE_URL`.
-
-Nạp lại schema từ đầu (xóa hết dữ liệu):
-
-```bash
-docker compose down -v && docker compose up -d
-```
-
-**Cách B – PostgreSQL cài sẵn trên máy (pgAdmin):**
-
-1. Trong pgAdmin tạo database (ví dụ `btldbms`).
-2. Mở Query Tool của database đó, chạy toàn bộ `database/schema.sql`.
-3. Sửa `DATABASE_URL` trong `backend/.env` của **riêng bạn**:
-   ```
-   DATABASE_URL=postgres://postgres:MAT_KHAU@localhost:5432/btldbms
-   ```
-
-> Lưu ý: `schema.sql` bắt đầu bằng `DROP TABLE ... CASCADE`, chạy lại sẽ **xóa sạch dữ liệu**.
-
-### Bước 4 – Firestore Emulator
-
-```bash
-firebase emulators:start --config firebase/firebase.json --project ticketrush-dev
-```
-
-Lần đầu Firebase tải file emulator (~60 MB). UI quản lý: http://127.0.0.1:4001. Dữ liệu trong Emulator **mất khi tắt** (dùng script seed để nạp lại).
-
-### Bước 5 – Backend
+Chạy backend và frontend ở hai terminal:
 
 ```bash
 npm --prefix backend run dev
-```
-
-Kiểm tra http://localhost:4000/api/health, kết quả đúng:
-
-```json
-{ "ok": true, "postgres": "up", "firestore": "up" }
-```
-
-Lần gọi đầu có thể chậm vài giây (Firestore khởi động nguội).
-
-### Bước 6 – Frontend
-
-```bash
 npm --prefix frontend run dev
 ```
 
-Mở http://localhost:5173. Vite tự chuyển tiếp `/api` sang backend cổng 4000.
+Mở http://localhost:5173. API health: http://localhost:4000/api/health.
 
-### Bước 7 – Dữ liệu mẫu
+## Luồng TV4
 
-```bash
-node scripts/seed.js
-```
+Khách đăng ký/đăng nhập, xem sự kiện, chọn ghế trong khu vực, tạo order giữ ghế 10 phút, thanh toán giả lập hoặc hủy order. Hủy order đã thanh toán ghi payment `REFUNDED` trong database; không gọi cổng thanh toán thật.
 
-`seed.js` hiện còn là TODO của TV2. Trong lúc chờ, tạo tài khoản bằng trang đăng ký hoặc gọi `POST /api/auth/register` (tài khoản mới luôn là `CUSTOMER`; muốn ADMIN/STAFF thì sửa cột `role` trong bảng `users`).
+ERD tại [docs/erd/ticketrush.md](docs/erd/ticketrush.md), phần lý thuyết tại [docs/data-storage.md](docs/data-storage.md), API tại [docs/api.md](docs/api.md), PostgreSQL DDL tại [database/schema.sql](database/schema.sql).
 
-## 5. Các cổng dịch vụ
+> Cảnh báo: `database/schema.sql` có `DROP TABLE ... CASCADE` và `DROP TYPE`; chỉ chạy trên database mới hoặc nơi có thể xóa toàn bộ dữ liệu.
 
-| Dịch vụ | Cổng |
-| --- | --- |
-| Frontend (Vite) | 5173 |
-| Backend (Express) | 4000 |
-| PostgreSQL Docker | 5433 (cổng 5432 hay bị PostgreSQL cài sẵn trên Windows chiếm) |
-| Firestore Emulator | 8085 (8080 hay bị chương trình khác chiếm) |
-| Auth Emulator | 9099 |
-| Emulator UI | 4001 |
-
-Muốn đổi cổng nào thì sửa đồng bộ: `docker-compose.yml`, `firebase/firebase.json`, `backend/.env`, `frontend/src/lib/firebase.js`.
-
-## 6. Tình trạng hiện tại
-
-Đây là **khung dự án**: cấu trúc và dây nối đã xong, nghiệp vụ còn để trống.
-
-| Phần | Trạng thái |
-| --- | --- |
-| Kết nối PostgreSQL, Firestore, `GET /api/health` | Xong, đã kiểm tra chạy |
-| Đăng ký, đăng nhập, JWT, phân quyền role, Firebase custom token | Xong (`modules/auth`) |
-| Xử lý lỗi tập trung `{ error: { code, message } }` | Xong |
-| Routing frontend, layout, `ProtectedRoute`, `AuthContext`, API client | Xong |
-| Firestore rules, cấu hình Emulator | Có bản đầu, TV5 hoàn thiện |
-| Module nghiệp vụ (events, zones, booking, tickets, checkin, reports, reviews, sync) | **Placeholder**: gọi vào trả `501 NOT_IMPLEMENTED` |
-| 6 thí nghiệm DBMS Lab | **Placeholder** (khung `labRunner` + bảng kết quả hai cột đã có) |
-| Trang giao diện | Chỉ có tiêu đề, chờ hiện thực |
-| `seed.js`, `load-test.js` | TODO |
-
-Tìm mọi việc cần làm:
+## Kiểm tra
 
 ```bash
-grep -rn "TODO \[" backend frontend scripts firebase
+cd backend && npm test
+cd frontend && npm run build
 ```
-
-Mỗi `TODO` ghi rõ chức năng, người phụ trách và loại truy vấn a–h.
-
-## 7. Phân công và file của từng người
-
-| TV | Topic | Chức năng | Việc khác |
-| --- | --- | --- | --- |
-| 1 (nhóm trưởng) | Transaction + Backup & recovery | #1 xem sự kiện theo thể loại, #8 quản lý sự kiện | `reviews` (tạm giao) |
-| 2 | Indexing | #2 lọc sự kiện, #9 quản lý khu vực/giá | Khung backend, dữ liệu mẫu, kiểm thử |
-| 3 | Query processing | #10 thống kê, #11 phát hiện gom vé | Khung frontend, khung DBMS Lab |
-| 4 | Data storage | #4 chọn ghế và mua vé, #5 hủy đơn | ERD, schema |
-| 5 | Concurrency control | #3 phòng chờ ảo, #6 vé của tôi, #7 soát vé | Cấu hình Firebase, đồng bộ, sơ đồ ghế realtime |
-
-File chính của từng người:
-
-| TV | Backend | Frontend |
-| --- | --- | --- |
-| 1 | `modules/events`, `modules/reviews`, `labs/transaction`, `labs/backup-recovery` | `pages/EventListPage`, `pages/AdminEventsPage`, `pages/lab/Transaction…`, `pages/lab/BackupRecovery…` |
-| 2 | `modules/zones`, `labs/indexing`, `scripts/seed.js`, `tests/` | `pages/AdminZonesPage`, `pages/lab/IndexingLabPage` |
-| 3 | `modules/reports`, `labs/query-processing` | `pages/AdminReportsPage`, `pages/AdminSuspiciousPage`, `components/lab/*` |
-| 4 | `modules/booking`, `labs/data-storage`, `database/schema.sql` | `pages/EventDetailPage` (chọn ghế/mua), `pages/CheckoutPage` |
-| 5 | `modules/tickets`, `modules/checkin`, `modules/sync`, `labs/concurrency-control`, `firebase/`, `scripts/load-test.js` | `pages/MyTicketsPage`, `pages/CheckinPage`, `pages/WaitingRoomPage`, `lib/firebase.js`, sơ đồ ghế trong `EventDetailPage` |
-
-`EventListPage` dùng chung giữa TV1 (#1) và TV2 (#2), nên thống nhất trước ai sửa phần nào để tránh xung đột Git.
-
-## 8. Cách thêm một chức năng
-
-Ví dụ làm `GET /api/tickets/mine` (#6, loại **f** join). Mỗi module có 4 file trong `backend/src/modules/tickets/`:
-
-1. **`tickets.route.js`** – đã khai báo sẵn endpoint và middleware quyền. Chỉ sửa khi thêm endpoint mới.
-2. **`tickets.controller.js`** – chỉ đọc request và trả JSON, không có SQL, không có nghiệp vụ.
-3. **`tickets.service.js`** – nghiệp vụ, kiểm tra điều kiện, điều phối transaction, gọi `sync` sau COMMIT.
-4. **`tickets.repository.js`** – **SQL thuần** ở đây. Thay dòng `throw notImplemented(...)` bằng truy vấn thật:
-
-```js
-import { pool } from '../../config/pg.js';
-
-// [f] join: vé của tôi
-export async function listMyTickets({ user }) {
-  const { rows } = await pool.query(
-    `SELECT t.ticket_id, t.qr_code, t.status, e.title, z.name AS zone, s.row_label, s.seat_no
-       FROM tickets t
-       JOIN orders o ON o.order_id = t.order_id
-       JOIN seats s  ON s.seat_id  = t.seat_id
-       JOIN zones z  ON z.zone_id  = s.zone_id
-       JOIN events e ON e.event_id = o.event_id
-      WHERE o.user_id = $1
-      ORDER BY e.event_date`,
-    [user.userId],
-  );
-  return rows;
-}
-```
-
-Phía frontend: thêm hàm gọi vào `src/api/*.js`, rồi dùng trong trang tương ứng ở `src/pages/`. Route và quyền đã khai báo sẵn trong `App.jsx`.
-
-Nhớ **ghi loại truy vấn a–h trong comment** phía trên mỗi truy vấn: brief yêu cầu đủ 8 loại (a insert, b delete, c update, d một điều kiện, e điều kiện kết hợp, f join, g subquery, h hàm tổng hợp).
-
-## 9. Backend chi tiết
-
-**Luồng một request:** `Route → Controller → Service → Repository`.
-
-- `authenticate` đọc `Authorization: Bearer <jwt>` rồi gán `req.user = { userId, role }`.
-- `authorize('ADMIN')` hoặc `authorize('STAFF', 'ADMIN')` kiểm tra role.
-- Mọi lỗi đi vào `errorHandler`, trả `{ "error": { "code", "message" } }`. Ném lỗi nghiệp vụ bằng `throw new AppError(409, 'SEAT_TAKEN', 'Ghế đã có người giữ')`. Lỗi PostgreSQL phổ biến (`23505` trùng, `23503` khóa ngoại, `23514` CHECK, `P0001` trigger) được đổi sang mã HTTP 409/400 tương ứng.
-- `notImplemented('tên')` trả `501` cho hàm chưa làm.
-
-**Kết nối PostgreSQL** (`config/pg.js`): thư viện `pg` viết SQL thuần, **không dùng ORM**. Cột `NUMERIC` (tiền VND) trả về `number`, cột `BIGINT` (id) trả về `string`.
-
-**Transaction phải dùng một client duy nhất**. Dùng helper `withTransaction`:
-
-```js
-import { withTransaction } from '../../config/pg.js';
-
-await withTransaction(async (client) => {
-  await client.query('SELECT ... FROM users WHERE user_id = $1 FOR UPDATE', [uid]); // khóa trước khi đếm
-  const { rows } = await client.query(
-    'SELECT * FROM seats WHERE seat_id = ANY($1) FOR UPDATE', [seatIds]);            // khóa ghế
-  // ... kiểm tra, insert orders/tickets ...
-});   // tự COMMIT, lỗi thì tự ROLLBACK
-```
-
-**Lưu ý concurrency** (quan trọng cho #4): trigger `ticket_rules` đếm số vé không an toàn khi hai transaction của cùng một người chạy song song. Service mua vé **phải** `SELECT … FROM users WHERE user_id = $1 FOR UPDATE` trước khi đếm, và khóa ghế bằng `SELECT … FOR UPDATE` (hoặc `SKIP LOCKED`).
-
-**Đồng bộ sang Firestore:** sau khi transaction COMMIT, gọi các hàm trong `modules/sync/sync.publisher.js` (`publishSeatChanged`, `publishZonesSummary`, `publishValidTicket`, `publishNotification`). Không đồng bộ trong lúc transaction chưa commit.
-
-**Danh sách API** (tiền tố `/api`, chi tiết ở [docs/api.md](docs/api.md)):
-
-| Module | Endpoint | Quyền |
-| --- | --- | --- |
-| health | `GET /health` | – |
-| auth | `POST /auth/register`, `/auth/login`, `/auth/firebase-token`; `GET /auth/me` | – / đăng nhập |
-| events | `GET /events`, `/events/genres`, `/events/:id`; `POST`, `PUT`, `DELETE` | – / ADMIN |
-| zones | `GET`, `POST /events/:id/zones`; `PUT`, `DELETE /zones/:id`; `POST /zones/:id/generate-seats` | – / ADMIN |
-| booking | `POST /orders`, `/orders/:id/pay`, `/orders/:id/cancel`; `GET /orders` | đăng nhập |
-| tickets | `GET /tickets/mine` | đăng nhập |
-| checkin | `GET /checkin/events/:id/valid-tickets`, `POST /checkin/sync` | STAFF, ADMIN |
-| reports | `GET /admin/reports/revenue`, `/occupancy`, `/suspicious-accounts` | ADMIN |
-| reviews | `GET`, `POST /events/:id/reviews`; `GET /events/:id/reviews/summary` | – / đăng nhập |
-| sync | `POST /admin/sync/events/:id`, `/admin/sync/all` | ADMIN |
-| labs | `POST /admin/labs/<topic>/run`, `GET /admin/labs/<topic>/runs` | ADMIN |
-
-## 10. Frontend chi tiết
-
-- **Router** trong `App.jsx`. Trang công khai dùng `MainLayout`, trang admin dùng `AdminLayout`, DBMS Lab lồng trong admin với `LabLayout` (thanh chọn 6 topic).
-- **`ProtectedRoute`**: `<ProtectedRoute>` chỉ cần đăng nhập, `<ProtectedRoute roles={['ADMIN']}>` cần đúng role.
-- **`useAuth()`** trả về `{ user, loading, login, register, logout }`. JWT lưu trong `localStorage`.
-- **Gọi API**: dùng `api/client.js` (tự gắn JWT, ném `Error` có `message`, `code`, `status`). Đặt hàm gọi API theo module trong `src/api/`.
-- **Firestore realtime**: dùng `db` từ `lib/firebase.js`, ví dụ `onSnapshot(collection(db, 'events', eventId, 'seats'), …)`. Để đọc Firestore đúng quyền, đăng nhập Firebase bằng custom token từ `POST /api/auth/firebase-token` (TV5 làm trong `AuthContext`).
-- **Giao diện tiếng Việt**, Tailwind CSS v3. Tiền tệ VND hiển thị theo `Intl.NumberFormat('vi-VN')`, thời gian hiển thị giờ Việt Nam.
-- Quét QR dùng thư viện `html5-qrcode`.
-
-## 11. Dữ liệu: PostgreSQL và Firestore
-
-### PostgreSQL – 10 bảng (`database/schema.sql`)
-
-`users`, `genres`, `venues`, `events`, `zones`, `seats`, `orders`, `tickets`, `payments`, `reviews`.
-
-Vòng đời trạng thái:
-
-| Đối tượng | Trạng thái |
-| --- | --- |
-| `events.status` | DRAFT, ON_SALE, SOLD_OUT, CANCELLED, ENDED |
-| `seats.status` | AVAILABLE → HELD → SOLD |
-| `orders.status` | PENDING, PAID, CANCELLED, EXPIRED (giữ ghế 10 phút) |
-| `tickets.status` | VALID, CHECKED_IN, CANCELLED |
-| `payments.status` | PENDING, SUCCESS, FAILED, REFUNDED |
-
-Ràng buộc nghiệp vụ đã có sẵn trong schema (đừng tự viết lại ở code):
-
-- `uq_active_ticket_per_seat`: một ghế có tối đa một vé chưa hủy.
-- Trigger `ticket_rules`: ghế thuộc đúng sự kiện của đơn; mỗi người không quá `max_tickets_per_user` vé còn hiệu lực cho một sự kiện.
-- `chk_hold`: ghế HELD phải có `held_by` và `held_until`.
-- `uq_success_payment_per_order`: mỗi đơn một lần thanh toán thành công.
-- `users.phone` **không UNIQUE** (cố ý, để phát hiện gom vé, #11).
-
-Tiền lưu số nguyên VND; thời gian lưu `timestamptz`.
-
-**Sửa schema:** thảo luận với TV4 (phụ trách schema/ERD). Thay đổi đặt trong `database/migrations/YYYYMMDD_mota.sql` **và** cập nhật `schema.sql` cho khớp, rồi báo cả nhóm nạp lại.
-
-### Firestore
-
-```
-events/{eventId}
-    title, date, zonesSummary: { VIP: { left: 12 }, GA: { left: 340 } }
-    seats/{seatId}          status, heldBy, heldUntil, zone, row, number
-    queue/{userId}          position, joinedAt, admitted
-validTickets/{qrCode}       eventId, seatLabel, holderName, checkedIn, checkedInAt
-notifications/{userId}/items/{id}   message, read, createdAt
-```
-
-- `eventId`, `seatId` dùng lại id PostgreSQL (dạng chuỗi); `qrCode` = `tickets.qr_code`.
-- Firebase uid = `String(users.user_id)`, custom claim `role`.
-- Security Rules (`firebase/firestore.rules`): client chỉ được **đọc**; STAFF được cập nhật đúng hai trường `checkedIn`, `checkedInAt` của `validTickets`. Backend dùng Admin SDK nên không bị rules chặn.
-
-## 12. DBMS Lab
-
-Khu vực trong trang Admin (`/admin/labs/<topic>`), mỗi topic một trang gồm: mô tả kịch bản, nút chạy, **bảng kết quả hai cột PostgreSQL | Firestore**, ghi chú kết luận.
-
-| Topic (slug) | Thí nghiệm | Phụ trách |
-| --- | --- | --- |
-| `data-storage` | Cùng dữ liệu vé lưu hai mô hình; so sánh dung lượng, số lần đọc, chi phí Firestore | TV4 |
-| `indexing` | Tìm đơn theo email/sự kiện/trạng thái; bật/tắt index; `EXPLAIN ANALYZE` và Query Explain | TV2 |
-| `query-processing` | Báo cáo doanh thu theo khu vực: SQL JOIN + GROUP BY so với cách làm trên Firestore | TV3 |
-| `transaction` | Luồng mua vé; giả lập lỗi thanh toán để thấy rollback ở hai bên | TV1 |
-| `concurrency-control` | "Giả lập giờ G": N người (mặc định 500) giành M vé (mặc định 50); đo bán trùng, xung đột, thời gian; có biến thể không khóa | TV5 |
-| `backup-recovery` | Xóa nhầm một sự kiện rồi khôi phục (pg_dump/restore; Firestore export/import hoặc PITR) | TV1 |
-
-**Cách viết một thí nghiệm** – mỗi topic có 3 file trong `backend/src/labs/<topic>/`:
-
-- `postgres.js` và `firestore.js`: mỗi file export `run(params)`, trả về `{ metrics: { <tên>: <giá trị> }, details? }`. **Hai file phải dùng cùng khóa `metrics`** để bảng hai cột so sánh được.
-- `index.js`: đã nối sẵn với `labRunner`, thường không cần sửa.
-
-Ví dụ kết quả chạy xong (do `labRunner` gom lại):
-
-```json
-{
-  "topic": "concurrency-control",
-  "params": { "users": 500, "seats": 50 },
-  "results": {
-    "postgres":  { "ok": true, "durationMs": 1200, "metrics": { "sold": 50, "duplicates": 0 } },
-    "firestore": { "ok": true, "durationMs": 3400, "metrics": { "sold": 50, "duplicates": 0 } }
-  }
-}
-```
-
-Mỗi lần chạy tự lưu thành file JSON ở `backend/lab-results/<topic>/` (đã `.gitignore`) để đưa vào báo cáo. Copy các file cần thiết vào `docs/` nếu muốn commit làm bằng chứng.
-
-## 13. Quy ước làm việc
-
-**Git**
-
-- `main` luôn chạy được. Làm trên nhánh `feature/<tên-việc>`, gộp bằng pull request.
-- Commit dạng `feat(booking): giữ ghế bằng SELECT FOR UPDATE`, `fix(lab): sửa đo thời gian`.
-- Làm trong thư mục module của mình để ít xung đột. Cần sửa file chung (`routes/index.js`, `App.jsx`, `schema.sql`, `firestore.rules`) thì báo nhóm trước.
-- **Không commit** `.env`, `serviceAccount.json`, `node_modules`, `*.log`.
-
-**Code**
-
-- API REST, tiền tố `/api`, JSON; lỗi trả `{ error: { code, message } }`.
-- SQL thuần, tham số `$1, $2…`, **không nối chuỗi** (tránh SQL injection).
-- Transaction dùng một client từ pool (`withTransaction`).
-- Mỗi truy vấn ghi loại a–h trong comment, ví dụ `// [f] join: vé của tôi`.
-- JavaScript ES modules (`import`/`export`), giao diện tiếng Việt.
-- Không dùng ORM.
-
-**Cấu hình**
-
-- Biến môi trường qua `.env`; thêm biến mới thì cập nhật cả `.env.example`.
-- Mỗi người dùng `.env` riêng, đặc biệt `DATABASE_URL`.
-
-## 14. Xử lý sự cố thường gặp
-
-| Triệu chứng | Nguyên nhân và cách xử lý |
-| --- | --- |
-| `password authentication failed for user ...` | Sai `DATABASE_URL`, hoặc cổng 5432 đang thuộc PostgreSQL cài sẵn còn Docker ở 5433. Kiểm tra user, mật khẩu, cổng trong `backend/.env` |
-| `Thiếu biến môi trường DATABASE_URL` | Chưa tạo `backend/.env`. Chạy `cp backend/.env.example backend/.env` |
-| `/api/health` báo `firestore: down` | Chưa chạy Firestore Emulator, hoặc `FIRESTORE_EMULATOR_HOST` trong `.env` sai cổng |
-| Emulator báo `Port 8080 is not open` / `port taken` | Cổng bị chương trình khác chiếm. Dự án đã dùng 8085; nếu vẫn kẹt, đổi cổng đồng bộ ở 4 nơi (mục 5) |
-| Vite báo `Port 5173 is in use` | Đã có Vite chạy sẵn. Tắt bản cũ hoặc dùng cổng vừa được báo |
-| `501 NOT_IMPLEMENTED` | Chức năng chưa hiện thực, thay `throw notImplemented(...)` bằng code thật |
-| `409`/`RULE_VIOLATION` khi mua vé | Trigger `ticket_rules` chặn (sai sự kiện hoặc vượt giới hạn vé) – đúng thiết kế |
-| Frontend gọi API bị lỗi CORS | Đảm bảo gọi qua `/api` (proxy Vite) và `CORS_ORIGIN` trong `backend/.env` khớp địa chỉ frontend |
-| Sau `docker compose down -v` mất hết dữ liệu | Đúng như dự kiến (xóa volume). Nạp lại bằng `scripts/seed.js` |
-
-Thắc mắc khác: xem [docs/assumptions.md](docs/assumptions.md) (các giả định khi dựng khung) và [docs/architecture.md](docs/architecture.md).

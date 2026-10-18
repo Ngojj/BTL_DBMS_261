@@ -8,4 +8,3 @@ if (!admin.apps.length) {
 }
 
 export const firestore = admin.firestore();
-export const firebaseAuth = () => admin.auth();

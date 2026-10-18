@@ -10,6 +10,3 @@ export const login = asyncHandler(async (req, res) => {
 export const me = asyncHandler(async (req, res) => {
   res.json(await service.me(req.user.userId));
 });
-export const firebaseToken = asyncHandler(async (req, res) => {
-  res.json(await service.firebaseToken(req.user));
-});

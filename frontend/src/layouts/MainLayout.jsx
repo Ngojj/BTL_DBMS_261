@@ -8,9 +8,6 @@ export default function MainLayout() {
       <header className="bg-white border-b">
         <nav className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-4">
           <Link to="/" className="font-bold text-indigo-600">TicketRush</Link>
-          {user && <Link to="/my-tickets">Vé của tôi</Link>}
-          {user && ['STAFF', 'ADMIN'].includes(user.role) && <Link to="/staff/checkin">Soát vé</Link>}
-          {user?.role === 'ADMIN' && <Link to="/admin">Quản trị</Link>}
           <span className="ml-auto flex items-center gap-3">
             {user ? (
               <>
