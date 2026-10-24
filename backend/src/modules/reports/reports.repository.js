@@ -6,7 +6,6 @@
 // có tối đa MỘT payment SUCCESS nên phép join không làm nhân đôi dòng. Số này khớp SUM(payments.amount) SUCCESS.
 // Ngày được cắt theo giờ Việt Nam (UTC+7) trên payments.paid_at.
 import { pool } from '../../config/pg.js';
-import { notImplemented } from '../../utils/AppError.js';
 
 const TZ = "'Asia/Ho_Chi_Minh'";
 const PAID_DAY = `(p.paid_at AT TIME ZONE ${TZ})::date`;
@@ -139,7 +138,49 @@ export async function overview({ filters }) {
   return { totals: t.rows[0], orders: o.rows, seats: s.rows[0], topEvents: e.rows };
 }
 
-// [g] #11 – tài khoản gom vé: vượt giới hạn / chung số điện thoại (subquery) – chưa hiện thực
-export async function suspiciousAccounts() {
-  throw notImplemented('reports.suspiciousAccounts');
+// [g] #11 – tài khoản gom vé (subquery + CTE). Ba dấu hiệu, tính trên vé còn hiệu lực của đơn PAID:
+//   1) OVER_LIMIT   – một tài khoản mua vượt max_tickets_per_user của một sự kiện
+//   2) SHARED_PHONE – nhiều tài khoản khách hàng dùng chung số điện thoại; GROUP_OVER_LIMIT nếu tổng vé của cả nhóm
+//                     cho một sự kiện vượt giới hạn của MỘT người (bằng chứng gom vé qua nhiều tài khoản)
+//   3) REPEAT_AT_LIMIT – mua đủ giới hạn ở từ atLimitEvents sự kiện trở lên (mua hết mức ở mọi show)
+// Trigger ticket_rules đã chặn (1) ở mức một tài khoản nên (1) chỉ xuất hiện nếu dữ liệu bị sửa trực tiếp.
+export async function suspiciousAccounts({ atLimitEvents }) {
+  const { rows } = await pool.query(
+    `WITH purchases AS (
+       SELECT o.user_id, e.event_id, e.title, e.max_tickets_per_user AS lim, COUNT(t.ticket_id)::int AS n
+         FROM orders o
+         JOIN events  e ON e.event_id = o.event_id
+         JOIN tickets t ON t.order_id = o.order_id AND t.status <> 'CANCELLED'
+        WHERE o.status = 'PAID'
+        GROUP BY o.user_id, e.event_id, e.title, e.max_tickets_per_user
+     ), shared_phones AS (
+       SELECT phone, COUNT(*)::int AS accounts
+         FROM users WHERE role = 'CUSTOMER'
+        GROUP BY phone HAVING COUNT(*) > 1
+     ), group_buys AS (
+       SELECT u.phone, p.event_id, p.title, p.lim, SUM(p.n)::int AS total
+         FROM purchases p
+         JOIN users u ON u.user_id = p.user_id
+        WHERE u.phone IN (SELECT phone FROM shared_phones)
+        GROUP BY u.phone, p.event_id, p.title, p.lim
+       HAVING SUM(p.n) > p.lim
+     )
+     SELECT u.user_id, u.email, u.full_name, u.phone,
+            COALESCE((SELECT SUM(p.n) FROM purchases p WHERE p.user_id = u.user_id), 0)::int AS ticket_count,
+            COALESCE(sp.accounts, 0) AS shared_accounts,
+            COALESCE((SELECT jsonb_agg(jsonb_build_object('eventId', p.event_id::text, 'eventTitle', p.title, 'tickets', p.n, 'limit', p.lim) ORDER BY p.event_id)
+                        FROM purchases p WHERE p.user_id = u.user_id AND p.n > p.lim), '[]'::jsonb) AS over_limit,
+            COALESCE((SELECT jsonb_agg(jsonb_build_object('eventId', g.event_id::text, 'eventTitle', g.title, 'tickets', g.total, 'limit', g.lim) ORDER BY g.event_id)
+                        FROM group_buys g WHERE g.phone = u.phone), '[]'::jsonb) AS group_over_limit,
+            (SELECT COUNT(*)::int FROM purchases p WHERE p.user_id = u.user_id AND p.n >= p.lim) AS at_limit_events
+       FROM users u
+       LEFT JOIN shared_phones sp ON sp.phone = u.phone
+      WHERE u.role = 'CUSTOMER'
+        AND ( sp.phone IS NOT NULL
+           OR EXISTS (SELECT 1 FROM purchases p WHERE p.user_id = u.user_id AND p.n > p.lim)
+           OR (SELECT COUNT(*) FROM purchases p WHERE p.user_id = u.user_id AND p.n >= p.lim) >= $1 )
+      ORDER BY ticket_count DESC, u.user_id`,
+    [atLimitEvents],
+  );
+  return rows;
 }
