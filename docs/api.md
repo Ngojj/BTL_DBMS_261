@@ -61,3 +61,18 @@ Tham số lọc chung (đều tùy chọn): `eventId` (số nguyên dương), `f
 | `GET /admin/reports/occupancy` | `[{ eventId, eventTitle, zone, capacity, sold, held, rate }]` (chỉ lọc theo `eventId`) | LEFT JOIN seats + COUNT FILTER |
 
 `cancelRate` = đơn hủy / (đơn đã thanh toán + đơn hủy); `share` và các tỷ lệ là phần trăm làm tròn 1 chữ số; `held` chỉ đếm ghế đang giữ chỗ còn hạn.
+
+## Phát hiện gom vé (reports) – loại truy vấn g
+
+`GET /admin/reports/suspicious-accounts` (chỉ ADMIN, không có tham số) trả mảng tài khoản bị gắn cờ, mức cao xếp trước:
+`[{ userId, email, fullName, phone, ticketCount, sharedPhoneAccounts, atLimitEvents, level: 'HIGH'|'MEDIUM', signals: [{ type, text }], reason }]`
+
+Chỉ tính vé còn hiệu lực (`status <> 'CANCELLED'`) của đơn `PAID`. Dấu hiệu (`signals[].type`):
+| type | Điều kiện | Mức |
+| --- | --- | --- |
+| `OVER_LIMIT` | một tài khoản mua nhiều hơn `events.max_tickets_per_user` của một sự kiện | HIGH |
+| `GROUP_OVER_LIMIT` | từ 2 tài khoản khách hàng chung số điện thoại, tổng vé cho một sự kiện vượt giới hạn của một người | HIGH |
+| `SHARED_PHONE` | từ 2 tài khoản khách hàng chung số điện thoại, chưa có bằng chứng mua vượt | MEDIUM |
+| `REPEAT_AT_LIMIT` | mua đủ giới hạn ở từ 3 sự kiện trở lên (2 sự kiện gắn cờ nhầm nhiều người mua bình thường) | MEDIUM |
+
+Trigger `ticket_rules` đã chặn việc một tài khoản vượt giới hạn, nên `OVER_LIMIT` chỉ xảy ra nếu dữ liệu bị sửa trực tiếp; đây là dấu hiệu kiểm tra chéo. Đây là dấu hiệu để admin xem xét, không phải kết luận gian lận.

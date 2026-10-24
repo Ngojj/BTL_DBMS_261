@@ -39,5 +39,5 @@ export function Pill({ tone = 'gray', children }) {
     orange: 'bg-orange-100 text-brand',
     blue: 'bg-indigo-100 text-royal',
   };
-  return <span className={'inline-block rounded-full px-3 py-1 text-xs font-bold ' + tones[tone]}>{children}</span>;
+  return <span className={'inline-block whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold ' + tones[tone]}>{children}</span>;
 }

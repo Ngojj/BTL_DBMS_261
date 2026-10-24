@@ -193,7 +193,7 @@ Dữ liệu sinh ra: 7 sự kiện (6 sắp diễn ra như mockup và 1 đã k�
 | CUSTOMER (demo, có 2 vé Rock B7 và B8 như mockup) | `khach@example.com` | `123456` |
 | CUSTOMER khác | email trong bảng `users` | `123456` |
 
-Dữ liệu để thử chức năng #11 (gom vé): `scalper@example.com` (16 vé ở nhiều sự kiện) và `acc.a`, `acc.b`, `acc.c` `@example.com` (3 tài khoản chung số điện thoại `0977123456`).
+Dữ liệu để thử chức năng #11 (gom vé): `acc.a`, `acc.b`, `acc.c` `@example.com` (3 tài khoản chung số điện thoại `0977123456`, tổng 12 vé cho một sự kiện có giới hạn 4/người) sẽ hiện mức **Cao**; `scalper@example.com` (đủ 4 vé ở 4 sự kiện, tổng 16 vé) hiện mức **Theo dõi**.
 
 ## 5. Các cổng dịch vụ
 
@@ -345,7 +345,7 @@ Giao diện dựng theo file mockup `TicketRush – Mockup giao diện.pdf` (6 m
 | `/admin/labs/<topic>` | `components/LabPage.jsx`, `pages/lab/labConfigs.js` | DBMS Lab (Concurrency control là bản mockup, 5 topic còn lại dùng chung khung) |
 | `/admin/events`, `zones` | `pages/AdminEventsPage.jsx`, `AdminZonesPage.jsx` | Chưa có mockup. Thêm, sửa, xóa; sinh ghế; nút **Đồng bộ** từng sự kiện và **Đồng bộ tất cả** sang Firestore (module `sync`) |
 | `/admin/reports` | `pages/AdminReportsPage.jsx`, `components/RevenueChart.jsx` | Thống kê kinh doanh (#10): 6 chỉ số, biểu đồ doanh thu theo ngày, top sự kiện, lấp đầy, bảng theo khu vực; lọc theo sự kiện và khoảng ngày. Backend `modules/reports` đã hiện thực |
-| `/admin/suspicious` | `pages/AdminSuspiciousPage.jsx` | Chưa có mockup; backend (#11) chưa hiện thực |
+| `/admin/suspicious` | `pages/AdminSuspiciousPage.jsx` | Phát hiện gom vé (#11): mức Cao / Theo dõi, danh sách dấu hiệu, nhóm tài khoản chung số điện thoại, lọc theo mức. Backend `modules/reports` đã hiện thực |
 | Khối đánh giá (cuối trang `/events/:id`) | `components/Reviews.jsx` | Điểm trung bình, danh sách, gửi đánh giá (mỗi người một lần) |
 | Chuông thông báo (header) | `components/NotificationBell.jsx`, `lib/notifications.js` | Đọc Firestore `notifications/{userId}/items`; trạng thái "đã xem" lưu cục bộ |
 | `/login`, `/register` | `pages/LoginPage.jsx`, `RegisterPage.jsx` | Chưa có mockup |

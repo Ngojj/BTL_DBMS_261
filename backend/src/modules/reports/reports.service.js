@@ -82,7 +82,35 @@ export async function overview({ query }) {
   };
 }
 
-// [g] #11 – chưa hiện thực
-export async function suspiciousAccounts(input) {
-  return repo.suspiciousAccounts(input);
+// [g] #11 – tài khoản gom vé
+const AT_LIMIT_EVENTS = 3; // mua đủ giới hạn ở từ 3 sự kiện trở lên thì đáng chú ý (2 sự kiện gắn cờ nhầm quá nhiều người mua bình thường)
+
+// Dựng danh sách dấu hiệu dễ đọc và mức độ: HIGH (bằng chứng vượt giới hạn) / MEDIUM (cần theo dõi)
+function describe(row) {
+  const signals = [];
+  for (const e of row.over_limit) signals.push({ type: 'OVER_LIMIT', text: `Vượt giới hạn tại ${e.eventTitle}: ${e.tickets}/${e.limit} vé` });
+  for (const e of row.group_over_limit)
+    signals.push({ type: 'GROUP_OVER_LIMIT', text: `${row.shared_accounts} tài khoản chung số điện thoại mua tổng ${e.tickets} vé tại ${e.eventTitle} (giới hạn ${e.limit}/người)` });
+  if (row.shared_accounts > 1 && row.group_over_limit.length === 0)
+    signals.push({ type: 'SHARED_PHONE', text: `${row.shared_accounts} tài khoản khách hàng dùng chung số điện thoại` });
+  if (row.at_limit_events >= AT_LIMIT_EVENTS)
+    signals.push({ type: 'REPEAT_AT_LIMIT', text: `Mua đủ giới hạn vé ở ${row.at_limit_events} sự kiện` });
+  const level = row.over_limit.length || row.group_over_limit.length ? 'HIGH' : 'MEDIUM';
+  return { signals, level };
+}
+
+const LEVEL_ORDER = { HIGH: 0, MEDIUM: 1 };
+
+export async function suspiciousAccounts() {
+  const rows = await repo.suspiciousAccounts({ atLimitEvents: AT_LIMIT_EVENTS });
+  return rows
+    .map((row) => {
+      const { signals, level } = describe(row);
+      return {
+        userId: String(row.user_id), email: row.email, fullName: row.full_name, phone: row.phone,
+        ticketCount: row.ticket_count, sharedPhoneAccounts: row.shared_accounts, atLimitEvents: row.at_limit_events,
+        level, signals, reason: signals.map((x) => x.text).join('; '),
+      };
+    })
+    .sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level] || b.ticketCount - a.ticketCount);
 }

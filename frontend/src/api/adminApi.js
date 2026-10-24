@@ -13,6 +13,8 @@ export const adminApi = {
   revenueDaily: (query) => withMock(() => api('/admin/reports/revenue/daily', { query }), () => mock.revenueDaily(query)),
   // [{ eventId, eventTitle, zone, capacity, sold, held, rate }]
   occupancy: (query) => withMock(() => api('/admin/reports/occupancy', { query }), () => mock.occupancy(query)),
+  // [{ userId, email, fullName, phone, ticketCount, sharedPhoneAccounts, atLimitEvents, level: 'HIGH'|'MEDIUM',
+  //    signals: [{ type: OVER_LIMIT|GROUP_OVER_LIMIT|SHARED_PHONE|REPEAT_AT_LIMIT, text }], reason }]
   suspicious: () => withMock(() => api('/admin/reports/suspicious-accounts'), () => mock.suspicious()),
   resyncEvent: (eventId) => api('/admin/sync/events/' + eventId, { method: 'POST' }),
   resyncAll: () => api('/admin/sync/all', { method: 'POST' }),

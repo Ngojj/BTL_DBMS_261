@@ -230,10 +230,13 @@ export function overview(q) {
   };
 }
 export const suspicious = () => [
-  { userId: '12', email: 'bulk.buyer@example.com', phone: '0901234567', reason: 'Vượt giới hạn vé / sự kiện', ticketCount: 9 },
-  { userId: '31', email: 'acc.one@example.com', phone: '0988000111', reason: '3 tài khoản chung số điện thoại', ticketCount: 4 },
-  { userId: '32', email: 'acc.two@example.com', phone: '0988000111', reason: '3 tài khoản chung số điện thoại', ticketCount: 4 },
-];
+  { userId: '31', email: 'acc.a@example.com', fullName: 'Trần Tài Khoản A', phone: '0977123456', ticketCount: 4, sharedPhoneAccounts: 3, atLimitEvents: 1, level: 'HIGH',
+    signals: [{ type: 'GROUP_OVER_LIMIT', text: '3 tài khoản chung số điện thoại mua tổng 12 vé tại Đêm nhạc Rock Quân khu 7 (giới hạn 4/người)' }] },
+  { userId: '32', email: 'acc.b@example.com', fullName: 'Trần Tài Khoản B', phone: '0977123456', ticketCount: 4, sharedPhoneAccounts: 3, atLimitEvents: 1, level: 'HIGH',
+    signals: [{ type: 'GROUP_OVER_LIMIT', text: '3 tài khoản chung số điện thoại mua tổng 12 vé tại Đêm nhạc Rock Quân khu 7 (giới hạn 4/người)' }] },
+  { userId: '12', email: 'scalper@example.com', fullName: 'Lê Gom Vé', phone: '0912000111', ticketCount: 16, sharedPhoneAccounts: 0, atLimitEvents: 4, level: 'MEDIUM',
+    signals: [{ type: 'REPEAT_AT_LIMIT', text: 'Mua đủ giới hạn vé ở 4 sự kiện' }] },
+].map((u) => ({ ...u, reason: u.signals.map((s) => s.text).join('; ') }));
 
 // ---------- Đánh giá ----------
 const names = ['Minh Anh', 'Quốc Bảo', 'Thu Hà', 'Đức Huy', 'Ngọc Lan', 'Gia Hân'];
