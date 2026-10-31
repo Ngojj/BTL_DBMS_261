@@ -20,7 +20,7 @@ export default function MainLayout() {
               {user.role === 'ADMIN' && (
                 <>
                   <Link to="/admin" className="text-gray-600 hover:text-indigo-700 font-medium">Quản trị</Link>
-                  <Link to="/lab/data-storage" className="text-gray-600 hover:text-indigo-700 font-medium">DBMS Lab</Link>
+                  <Link to="/lab" className="text-gray-600 hover:text-indigo-700 font-medium">🔬 DBMS Lab</Link>
                 </>
               )}
             </span>

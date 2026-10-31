@@ -11,11 +11,11 @@ export async function findById(userId) {
   return rows[0] ?? null;
 }
 
-// [a] insert
-export async function insertUser({ email, phone, fullName, passwordHash }) {
+// [a] insert: hỗ trợ truyền role
+export async function insertUser({ email, phone, fullName, passwordHash, role = 'CUSTOMER' }) {
   const { rows } = await pool.query(
-    'INSERT INTO users (email, phone, full_name, password_hash) VALUES ($1, $2, $3, $4) RETURNING *',
-    [email, phone, fullName, passwordHash],
+    'INSERT INTO users (email, phone, full_name, password_hash, role) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+    [email, phone, fullName, passwordHash, role],
   );
   return rows[0];
 }

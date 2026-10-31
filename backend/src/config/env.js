@@ -1,4 +1,11 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Ưu tiên nạp từ backend/.env, sau đó fallback về cwd
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config();
 
 const required = (name) => {
   const v = process.env[name];

@@ -17,7 +17,7 @@ import { firestore }             from '../backend/src/config/firebase.js';
 import bcrypt                    from 'bcrypt';
 
 const HASH_ROUNDS = 10;
-const PASSWORD    = 'Password123!';
+const PASSWORD    = '123456';
 
 async function main() {
   const client = await pool.connect();
@@ -249,7 +249,7 @@ async function main() {
     await vtBatch.commit();
 
     console.log('✓ Firestore synced');
-    console.log('\n✅ Seed hoàn tất! Đăng nhập thử với admin@ticketrush.vn / Password123!');
+    console.log('\n✅ Seed hoàn tất! Đăng nhập thử với admin@ticketrush.vn / 123456');
   } finally {
     client.release();
     await pool.end();

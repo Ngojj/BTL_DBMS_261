@@ -92,7 +92,7 @@ export default function MyTicketsPage() {
   function load() {
     setLoading(true);
     ticketsApi.mine()
-      .then((data) => setTickets(data.tickets ?? []))
+      .then((data) => setTickets(Array.isArray(data) ? data : (data?.tickets || [])))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }
