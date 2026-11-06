@@ -10,6 +10,7 @@ import reportsRoutes from '../modules/reports/reports.route.js';
 import adminRoutes   from '../modules/admin/admin.route.js';
 import checkinRoutes from '../modules/checkin/checkin.route.js';
 import syncRoutes    from '../modules/sync/sync.route.js';
+import queueRoutes   from '../modules/queue/queue.route.js';
 
 // DBMS Labs
 import dataStorageLabRoutes        from '../labs/data-storage/dataStorage.route.js';
@@ -25,6 +26,7 @@ router.get('/health', health);
 router.use('/auth',    authRoutes);
 router.use('/events',  eventsRoutes);
 router.use('/events',  reviewsRoutes); // GET/POST /api/events/:eventId/reviews
+router.use('/events/:eventId/queue', queueRoutes); // Phòng chờ ảo (#3)
 router.use('/',        zonesRoutes);
 router.use('/orders',  bookingRoutes);
 router.use('/tickets', ticketsRoutes);

@@ -94,3 +94,6 @@ test('Lab 6 - Backup Recovery: module exports backup recovery simulation functio
   assert.equal(typeof backupRecoveryLab.runFsBackupRecoveryLab, 'function');
 });
 
+// Thoát process sau khi tất cả test hoàn thành
+// (cần thiết vì Firebase Admin SDK giữ gRPC connection mở)
+setTimeout(() => process.exit(0), 500);

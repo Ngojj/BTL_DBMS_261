@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminApi } from '../../api/adminApi.js';
+import { queueApi } from '../../api/queueApi.js';
 
 const STATUS_COLOR = {
   DRAFT: 'bg-gray-100 text-gray-600',
@@ -23,6 +24,7 @@ export default function AdminEventsPage() {
   const [zoneForm, setZoneForm] = useState({ eventId: null, name: '', price: '', capacity: '', rowCount: 1, seatsPerRow: 10 });
   const [error,   setError]   = useState('');
   const [busy,    setBusy]    = useState(false);
+  const [queueMsg, setQueueMsg] = useState({});
 
   useEffect(() => {
     adminApi.listEvents().then((d) => setEvents(d.events ?? [])).catch((e) => setError(e.message));
@@ -58,8 +60,17 @@ export default function AdminEventsPage() {
     } catch (err) { setError(err.message); }
   }
 
-  async function saveZone(e) {
-    e.preventDefault(); setError(''); setBusy(true);
+  async function admitQueue(eventId, count = 10) {
+    try {
+      const res = await queueApi.admit(eventId, count);
+      setQueueMsg((m) => ({ ...m, [eventId]: `✅ Đã mở cho ${res.admittedCount} người vào` }));
+      setTimeout(() => setQueueMsg((m) => { const n = { ...m }; delete n[eventId]; return n; }), 4000);
+    } catch (err) {
+      setQueueMsg((m) => ({ ...m, [eventId]: `❌ ${err.message}` }));
+    }
+  }
+
+  async function saveZone(e) {    e.preventDefault(); setError(''); setBusy(true);
     try {
       await adminApi.createZone(zoneForm.eventId, {
         name: zoneForm.name, price: Number(zoneForm.price),
@@ -178,6 +189,11 @@ export default function AdminEventsPage() {
                     className="text-emerald-600 hover:underline text-xs">+ Khu vực</button>
                   <button onClick={() => deleteEvent(ev.eventId)}
                     className="text-red-600 hover:underline text-xs">Xóa</button>
+                  <button onClick={() => admitQueue(ev.eventId, 10)}
+                    className="text-purple-600 hover:underline text-xs" title="Mở hàng đợi cho 10 người">⏩ Hàng đợi</button>
+                  {queueMsg[ev.eventId] && (
+                    <span className="text-xs text-gray-500 ml-1">{queueMsg[ev.eventId]}</span>
+                  )}
                 </td>
               </tr>
             ))}

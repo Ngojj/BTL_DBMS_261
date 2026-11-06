@@ -8,6 +8,7 @@ import LoginPage        from './pages/LoginPage.jsx';
 import RegisterPage     from './pages/RegisterPage.jsx';
 import MyTicketsPage    from './pages/MyTicketsPage.jsx';
 import CheckinPage      from './pages/CheckinPage.jsx';
+import WaitingRoomPage  from './pages/WaitingRoomPage.jsx';
 
 // Admin
 import AdminLayout      from './pages/admin/AdminLayout.jsx';
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
 
         {/* Customer */}
+        <Route path="/events/:eventId/waiting-room" element={<ProtectedRoute><WaitingRoomPage /></ProtectedRoute>} />
         <Route path="/checkout/:orderId" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
         <Route path="/my-tickets"        element={<ProtectedRoute><MyTicketsPage /></ProtectedRoute>} />
 

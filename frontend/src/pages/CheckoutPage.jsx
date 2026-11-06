@@ -81,8 +81,11 @@ export default function CheckoutPage() {
           <button type="button" onClick={cancel} disabled={busy} className="rounded border border-gray-300 px-4 py-2 font-semibold disabled:opacity-50">Hủy đơn</button>
         </div>}
         {order.status === 'PAID' && <div className="flex flex-wrap items-center gap-3">
-          <p role="status" className="font-semibold text-green-800">Đã thanh toán</p>
-          <button type="button" onClick={cancel} disabled={busy} className="rounded border border-red-300 px-4 py-2 font-semibold text-red-800 disabled:opacity-50">
+          <p role="status" className="font-semibold text-green-800">✓ Đã thanh toán thành công</p>
+          <Link to="/my-tickets" className="rounded-lg bg-indigo-700 px-4 py-2 font-semibold text-white hover:bg-indigo-800 shadow">
+            Xem vé &amp; mã QR của tôi →
+          </Link>
+          <button type="button" onClick={cancel} disabled={busy} className="rounded-lg border border-red-300 px-4 py-2 font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">
             {busy ? 'Đang hủy…' : 'Hủy đơn / hoàn tiền'}
           </button>
         </div>}
