@@ -1,4 +1,4 @@
-# Cấu hình Render (Blueprint) cho backend. Hướng dẫn đầy đủ: docs/deploy.md
+# Cấu hình Render (Blueprint) cho backend.
 # Các biến đánh dấu sync: false phải tự điền trên giao diện Render (chứa bí mật, không commit).
 services:
   - type: web

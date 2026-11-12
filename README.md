@@ -195,10 +195,6 @@ Dữ liệu sinh ra: 7 sự kiện (6 sắp diễn ra như mockup và 1 đã k�
 
 Dữ liệu để thử chức năng #11 (gom vé): `acc.a`, `acc.b`, `acc.c` `@example.com` (3 tài khoản chung số điện thoại `0977123456`, tổng 12 vé cho một sự kiện có giới hạn 4/người) sẽ hiện mức **Cao**; `scalper@example.com` (đủ 4 vé ở 4 sự kiện, tổng 16 vé) hiện mức **Theo dõi**.
 
-## Deploy lên mạng
-
-Hướng dẫn đưa ứng dụng lên mạng miễn phí (Firebase Hosting, Render, Neon) để mở trên điện thoại và dùng camera quét QR: [docs/deploy.md](docs/deploy.md).
-
 ## 5. Các cổng dịch vụ
 
 | Dịch vụ | Cổng |
