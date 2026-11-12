@@ -1,24 +1,84 @@
 // Dữ liệu mẫu để xem giao diện khi backend chưa làm xong (chỉ dùng khi VITE_USE_MOCK=true).
 // Hình dạng dữ liệu ở đây CHÍNH LÀ hợp đồng API mà backend cần trả về (xem docs/api.md).
 
-const iso = (s) => new Date(s + '+07:00').toISOString();
+const iso = (s) => new Date(s + "+07:00").toISOString();
 
 export const genres = [
-  { genreId: 1, name: 'Pop' },
-  { genreId: 2, name: 'Rock' },
-  { genreId: 3, name: 'EDM' },
-  { genreId: 4, name: 'Indie' },
-  { genreId: 5, name: 'Acoustic' },
+  { genreId: 1, name: "Pop" },
+  { genreId: 2, name: "Rock" },
+  { genreId: 3, name: "EDM" },
+  { genreId: 4, name: "Indie" },
+  { genreId: 5, name: "Acoustic" },
 ];
 
 const events = [
-  { eventId: 1, title: 'Concert Pop Mùa Thu', genre: 'Pop', genreId: 1, venueName: 'Nhà thi đấu Phú Thọ', city: 'TP. HCM', eventDate: iso('2026-11-15T19:30:00'), saleOpenAt: iso('2026-11-01T10:00:00'), minPrice: 800000 },
-  { eventId: 2, title: 'Đêm nhạc Rock Quân khu 7', genre: 'Rock', genreId: 2, venueName: 'SVĐ Quân khu 7', city: 'TP. HCM', eventDate: iso('2026-11-22T19:00:00'), saleOpenAt: iso('2026-09-15T10:00:00'), minPrice: 650000 },
-  { eventId: 3, title: 'Lễ hội EDM Bên Sông', genre: 'EDM', genreId: 3, venueName: 'Công viên bờ sông', city: 'Đà Nẵng', eventDate: iso('2026-11-29T17:00:00'), saleOpenAt: iso('2026-09-20T10:00:00'), minPrice: 1200000 },
-  { eventId: 4, title: 'Show Indie Hòa Bình', genre: 'Indie', genreId: 4, venueName: 'Nhà hát Hòa Bình', city: 'TP. HCM', eventDate: iso('2026-12-06T20:00:00'), saleOpenAt: iso('2026-11-01T10:00:00'), minPrice: 450000 },
-  { eventId: 5, title: 'Concert Cuối Năm', genre: 'Pop', genreId: 1, venueName: 'SVĐ Mỹ Đình', city: 'Hà Nội', eventDate: iso('2026-12-20T19:00:00'), saleOpenAt: iso('2026-11-01T10:00:00'), minPrice: 1500000 },
-  { eventId: 6, title: 'Đêm Acoustic Nhà Hát Lớn', genre: 'Acoustic', genreId: 5, venueName: 'Nhà hát Lớn', city: 'Hà Nội', eventDate: iso('2026-12-27T20:00:00'), saleOpenAt: iso('2026-09-25T10:00:00'), minPrice: 500000 },
-].map((e, i) => ({ ...e, venueId: [1, 2, 3, 4, 5, 6][i], status: 'ON_SALE' }));
+  {
+    eventId: 1,
+    title: "Concert Pop Mùa Thu",
+    genre: "Pop",
+    genreId: 1,
+    venueName: "Nhà thi đấu Phú Thọ",
+    city: "TP. HCM",
+    eventDate: iso("2026-11-15T19:30:00"),
+    saleOpenAt: iso("2026-11-01T10:00:00"),
+    minPrice: 800000,
+  },
+  {
+    eventId: 2,
+    title: "Đêm nhạc Rock Quân khu 7",
+    genre: "Rock",
+    genreId: 2,
+    venueName: "SVĐ Quân khu 7",
+    city: "TP. HCM",
+    eventDate: iso("2026-11-22T19:00:00"),
+    saleOpenAt: iso("2026-09-15T10:00:00"),
+    minPrice: 650000,
+  },
+  {
+    eventId: 3,
+    title: "Lễ hội EDM Bên Sông",
+    genre: "EDM",
+    genreId: 3,
+    venueName: "Công viên bờ sông",
+    city: "Đà Nẵng",
+    eventDate: iso("2026-11-29T17:00:00"),
+    saleOpenAt: iso("2026-09-20T10:00:00"),
+    minPrice: 1200000,
+  },
+  {
+    eventId: 4,
+    title: "Show Indie Hòa Bình",
+    genre: "Indie",
+    genreId: 4,
+    venueName: "Nhà hát Hòa Bình",
+    city: "TP. HCM",
+    eventDate: iso("2026-12-06T20:00:00"),
+    saleOpenAt: iso("2026-11-01T10:00:00"),
+    minPrice: 450000,
+  },
+  {
+    eventId: 5,
+    title: "Concert Cuối Năm",
+    genre: "Pop",
+    genreId: 1,
+    venueName: "SVĐ Mỹ Đình",
+    city: "Hà Nội",
+    eventDate: iso("2026-12-20T19:00:00"),
+    saleOpenAt: iso("2026-11-01T10:00:00"),
+    minPrice: 1500000,
+  },
+  {
+    eventId: 6,
+    title: "Đêm Acoustic Nhà Hát Lớn",
+    genre: "Acoustic",
+    genreId: 5,
+    venueName: "Nhà hát Lớn",
+    city: "Hà Nội",
+    eventDate: iso("2026-12-27T20:00:00"),
+    saleOpenAt: iso("2026-09-25T10:00:00"),
+    minPrice: 500000,
+  },
+].map((e, i) => ({ ...e, venueId: [1, 2, 3, 4, 5, 6][i], status: "ON_SALE" }));
 
 const findEvent = (id) => events.find((e) => e.eventId === Number(id));
 
@@ -28,7 +88,9 @@ export function listEvents(q = {}) {
       (!q.genreId || e.genreId === Number(q.genreId)) &&
       (!q.city || e.city === q.city) &&
       (!q.dateFrom || new Date(e.eventDate) >= new Date(q.dateFrom)) &&
-      (!q.dateTo || new Date(e.eventDate) <= new Date(q.dateTo + 'T23:59:59+07:00')) &&
+      (!q.dateTo ||
+        new Date(e.eventDate) <= new Date(q.dateTo + "T23:59:59+07:00")) &&
+      (!q.priceMin || e.minPrice >= Number(q.priceMin)) &&
       (!q.priceMax || e.minPrice <= Number(q.priceMax)),
   );
 }
@@ -36,7 +98,7 @@ export function listEvents(q = {}) {
 export function getEvent(id) {
   const e = findEvent(id);
   if (!e) {
-    const err = new Error('Không tìm thấy sự kiện');
+    const err = new Error("Không tìm thấy sự kiện");
     err.status = 404;
     throw err;
   }
@@ -45,8 +107,13 @@ export function getEvent(id) {
     ...e,
     maxTicketsPerUser: 4,
     zones: [
-      { zoneId: e.eventId * 10 + 1, name: 'VIP', price: vip, capacity: 48 },
-      { zoneId: e.eventId * 10 + 2, name: 'CAT 1', price: e.minPrice, capacity: 100 },
+      { zoneId: e.eventId * 10 + 1, name: "VIP", price: vip, capacity: 48 },
+      {
+        zoneId: e.eventId * 10 + 2,
+        name: "CAT 1",
+        price: e.minPrice,
+        capacity: 100,
+      },
     ],
   };
 }
@@ -60,8 +127,8 @@ function rng(seed) {
 export function mockSeats(eventId) {
   const r = rng(Number(eventId) * 7919);
   const layout = [
-    ['VIP', ['A', 'B', 'C'], 16],
-    ['CAT 1', ['D', 'E', 'F', 'G', 'H'], 20],
+    ["VIP", ["A", "B", "C"], 16],
+    ["CAT 1", ["D", "E", "F", "G", "H"], 20],
   ];
   const out = [];
   let id = Number(eventId) * 1000;
@@ -69,8 +136,15 @@ export function mockSeats(eventId) {
     for (const row of rows) {
       for (let number = 1; number <= count; number++) {
         const x = r();
-        const status = x < 0.2 ? 'SOLD' : x < 0.28 ? 'HELD' : 'AVAILABLE';
-        out.push({ seatId: String(++id), zone, row, number, status, heldBy: status === 'HELD' ? 'other' : null });
+        const status = x < 0.2 ? "SOLD" : x < 0.28 ? "HELD" : "AVAILABLE";
+        out.push({
+          seatId: String(++id),
+          zone,
+          row,
+          number,
+          status,
+          heldBy: status === "HELD" ? "other" : null,
+        });
       }
     }
   }
@@ -94,7 +168,9 @@ export function createOrder({ eventId, seatIds }, user, seatInfo) {
   const ev = getEvent(eventId);
   const mockSeatList = mockSeats(eventId);
   const items = seatIds.map((sid) => {
-    const s = seatInfo?.find((x) => String(x.seatId) === String(sid)) ?? mockSeatList.find((x) => x.seatId === String(sid));
+    const s =
+      seatInfo?.find((x) => String(x.seatId) === String(sid)) ??
+      mockSeatList.find((x) => x.seatId === String(sid));
     return {
       seatId: String(sid),
       seatLabel: s.row + s.number,
@@ -103,26 +179,26 @@ export function createOrder({ eventId, seatIds }, user, seatInfo) {
     };
   });
   const order = {
-    orderId: 'm' + Date.now(),
+    orderId: "m" + Date.now(),
     eventId: ev.eventId,
     eventTitle: ev.title,
     eventDate: ev.eventDate,
     venueName: ev.venueName,
     city: ev.city,
-    status: 'PENDING',
+    status: "PENDING",
     total: items.reduce((a, i) => a + i.price, 0),
     expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     holderName: user?.fullName,
     items,
   };
-  save('mock_orders', { ...load('mock_orders', {}), [order.orderId]: order });
+  save("mock_orders", { ...load("mock_orders", {}), [order.orderId]: order });
   return order;
 }
 
 export function getOrder(orderId) {
-  const o = load('mock_orders', {})[orderId];
+  const o = load("mock_orders", {})[orderId];
   if (!o) {
-    const err = new Error('Không tìm thấy đơn hàng');
+    const err = new Error("Không tìm thấy đơn hàng");
     err.status = 404;
     throw err;
   }
@@ -130,40 +206,68 @@ export function getOrder(orderId) {
 }
 
 export function payOrder(orderId) {
-  const orders = load('mock_orders', {});
+  const orders = load("mock_orders", {});
   const o = orders[orderId];
-  o.status = 'PAID';
-  save('mock_orders', orders);
+  o.status = "PAID";
+  save("mock_orders", orders);
   const tickets = ticketStore();
   o.items.forEach((i) =>
     tickets.push({
-      ticketId: uuid(), orderId, qrCode: uuid(), status: 'VALID', eventId: o.eventId, eventTitle: o.eventTitle,
-      eventDate: o.eventDate, venueName: o.venueName, city: o.city, zone: i.zone, seatLabel: i.seatLabel,
-      holderName: o.holderName ?? 'Khách', gate: '1', price: i.price,
+      ticketId: uuid(),
+      orderId,
+      qrCode: uuid(),
+      status: "VALID",
+      eventId: o.eventId,
+      eventTitle: o.eventTitle,
+      eventDate: o.eventDate,
+      venueName: o.venueName,
+      city: o.city,
+      zone: i.zone,
+      seatLabel: i.seatLabel,
+      holderName: o.holderName ?? "Khách",
+      gate: "1",
+      price: i.price,
     }),
   );
-  save('mock_tickets', tickets);
-  return { orderId, status: 'PAID' };
+  save("mock_tickets", tickets);
+  return { orderId, status: "PAID" };
 }
 
 export function cancelOrder(orderId) {
-  const orders = load('mock_orders', {});
-  if (orders[orderId]) orders[orderId].status = 'CANCELLED';
-  save('mock_orders', orders);
-  save('mock_tickets', ticketStore().map((t) => (t.orderId === orderId ? { ...t, status: 'CANCELLED' } : t)));
-  return { orderId, status: 'CANCELLED' };
+  const orders = load("mock_orders", {});
+  if (orders[orderId]) orders[orderId].status = "CANCELLED";
+  save("mock_orders", orders);
+  save(
+    "mock_tickets",
+    ticketStore().map((t) =>
+      t.orderId === orderId ? { ...t, status: "CANCELLED" } : t,
+    ),
+  );
+  return { orderId, status: "CANCELLED" };
 }
 
 // Vé mẫu ban đầu: 2 vé Rock (B7, B8) như trong mockup
 function ticketStore() {
-  const cur = load('mock_tickets', null);
+  const cur = load("mock_tickets", null);
   if (cur) return cur;
   const ev = findEvent(2);
-  const seed = ['B7', 'B8'].map((seatLabel, i) => ({
-    ticketId: 'seed' + i, orderId: 'seed', qrCode: uuid(), status: 'VALID', eventId: 2, eventTitle: ev.title,
-    eventDate: ev.eventDate, venueName: ev.venueName, city: ev.city, zone: 'VIP', seatLabel, holderName: 'Nguyễn Văn A', gate: '3', price: 1500000,
+  const seed = ["B7", "B8"].map((seatLabel, i) => ({
+    ticketId: "seed" + i,
+    orderId: "seed",
+    qrCode: uuid(),
+    status: "VALID",
+    eventId: 2,
+    eventTitle: ev.title,
+    eventDate: ev.eventDate,
+    venueName: ev.venueName,
+    city: ev.city,
+    zone: "VIP",
+    seatLabel,
+    holderName: "Nguyễn Văn A",
+    gate: "3",
+    price: 1500000,
   }));
-  save('mock_tickets', seed);
+  save("mock_tickets", seed);
   return seed;
 }
 
@@ -173,12 +277,16 @@ export const myTickets = () => ticketStore();
 export function mockCheckin(qr, eventId) {
   const tickets = ticketStore();
   const t = tickets.find((x) => x.qrCode === qr);
-  if (!t || String(t.eventId) !== String(eventId) || t.status === 'CANCELLED') return { status: 'invalid' };
-  const info = { seatLabel: t.zone + ' · Ghế ' + t.seatLabel, holderName: t.holderName };
-  if (t.status === 'CHECKED_IN') return { status: 'used', info };
-  t.status = 'CHECKED_IN';
-  save('mock_tickets', tickets);
-  return { status: 'valid', info };
+  if (!t || String(t.eventId) !== String(eventId) || t.status === "CANCELLED")
+    return { status: "invalid" };
+  const info = {
+    seatLabel: t.zone + " · Ghế " + t.seatLabel,
+    holderName: t.holderName,
+  };
+  if (t.status === "CHECKED_IN") return { status: "used", info };
+  t.status = "CHECKED_IN";
+  save("mock_tickets", tickets);
+  return { status: "valid", info };
 }
 
 // ---------- Báo cáo ----------
@@ -239,43 +347,82 @@ export const suspicious = () => [
 ].map((u) => ({ ...u, reason: u.signals.map((s) => s.text).join('; ') }));
 
 // ---------- Đánh giá ----------
-const names = ['Minh Anh', 'Quốc Bảo', 'Thu Hà', 'Đức Huy', 'Ngọc Lan', 'Gia Hân'];
-const sampleComments = ['Âm thanh ánh sáng rất tốt, rất đáng tiền.', 'Tổ chức chuyên nghiệp, soát vé nhanh.', 'Ghế nhìn rõ sân khấu, sẽ đi tiếp.', 'Hơi đông lúc vào cổng nhưng show tuyệt vời.'];
+const names = [
+  "Minh Anh",
+  "Quốc Bảo",
+  "Thu Hà",
+  "Đức Huy",
+  "Ngọc Lan",
+  "Gia Hân",
+];
+const sampleComments = [
+  "Âm thanh ánh sáng rất tốt, rất đáng tiền.",
+  "Tổ chức chuyên nghiệp, soát vé nhanh.",
+  "Ghế nhìn rõ sân khấu, sẽ đi tiếp.",
+  "Hơi đông lúc vào cổng nhưng show tuyệt vời.",
+];
 function reviewStore() {
-  const cur = load('mock_reviews', null);
+  const cur = load("mock_reviews", null);
   if (cur) return cur;
   const r = rng(11);
   const seed = {};
   for (const e of events) {
     seed[e.eventId] = Array.from({ length: 3 + (e.eventId % 3) }, (_, i) => ({
-      reviewId: e.eventId * 100 + i, userName: names[(e.eventId + i) % names.length], rating: 3 + Math.floor(r() * 3),
-      comment: i % 3 === 2 ? '' : sampleComments[(e.eventId + i) % sampleComments.length], createdAt: new Date(Date.now() - (i + 1) * 86400e3 * 2).toISOString(),
+      reviewId: e.eventId * 100 + i,
+      userName: names[(e.eventId + i) % names.length],
+      rating: 3 + Math.floor(r() * 3),
+      comment:
+        i % 3 === 2
+          ? ""
+          : sampleComments[(e.eventId + i) % sampleComments.length],
+      createdAt: new Date(Date.now() - (i + 1) * 86400e3 * 2).toISOString(),
     }));
   }
-  save('mock_reviews', seed);
+  save("mock_reviews", seed);
   return seed;
 }
-export const listReviews = (eventId) => [...(reviewStore()[eventId] ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+export const listReviews = (eventId) =>
+  [...(reviewStore()[eventId] ?? [])].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  );
 export function reviewSummary(eventId) {
   const l = reviewStore()[eventId] ?? [];
-  return { average: l.length ? l.reduce((s, r) => s + r.rating, 0) / l.length : 0, count: l.length };
+  return {
+    average: l.length ? l.reduce((s, r) => s + r.rating, 0) / l.length : 0,
+    count: l.length,
+  };
 }
 export function addReview(eventId, { rating, comment }, user) {
   const store = reviewStore();
   const list = (store[eventId] ??= []);
   if (list.some((r) => r.userId === user?.userId)) {
-    const err = new Error('Bạn đã đánh giá sự kiện này rồi');
+    const err = new Error("Bạn đã đánh giá sự kiện này rồi");
     err.status = 409;
     throw err;
   }
-  const review = { reviewId: Date.now(), userId: user?.userId, userName: user?.fullName ?? 'Khách', rating, comment, createdAt: new Date().toISOString() };
+  const review = {
+    reviewId: Date.now(),
+    userId: user?.userId,
+    userName: user?.fullName ?? "Khách",
+    rating,
+    comment,
+    createdAt: new Date().toISOString(),
+  };
   list.push(review);
-  save('mock_reviews', store);
+  save("mock_reviews", store);
   return review;
 }
 
 // ---------- Thông báo (Firestore notifications/{userId}/items) ----------
 export const notifications = () => [
-  { id: 'n1', message: 'Thanh toán thành công 2 vé Đêm nhạc Rock Quân khu 7.', createdAt: new Date(Date.now() - 3600e3).toISOString() },
-  { id: 'n2', message: 'Chào mừng bạn đến với TicketRush!', createdAt: new Date(Date.now() - 86400e3).toISOString() },
+  {
+    id: "n1",
+    message: "Thanh toán thành công 2 vé Đêm nhạc Rock Quân khu 7.",
+    createdAt: new Date(Date.now() - 3600e3).toISOString(),
+  },
+  {
+    id: "n2",
+    message: "Chào mừng bạn đến với TicketRush!",
+    createdAt: new Date(Date.now() - 86400e3).toISOString(),
+  },
 ];
