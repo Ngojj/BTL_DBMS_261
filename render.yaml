@@ -1,0 +1,26 @@
+# Cấu hình Render (Blueprint) cho backend. Hướng dẫn đầy đủ: docs/deploy.md
+# Các biến đánh dấu sync: false phải tự điền trên giao diện Render (chứa bí mật, không commit).
+services:
+  - type: web
+    name: ticketrush-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_SSL
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FIREBASE_PROJECT_ID
+        value: ticketrush-5a616
+      - key: DATABASE_URL
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false

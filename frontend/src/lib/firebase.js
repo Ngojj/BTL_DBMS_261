@@ -33,7 +33,10 @@ export async function pickGoogleAccount() {
   return { idToken: await user.getIdToken(), profile: { name: user.displayName, email: user.email } };
 }
 
+// Địa chỉ máy chạy emulator. Mặc định 127.0.0.1; khi mở ứng dụng từ điện thoại trong mạng nội bộ, đặt VITE_EMULATOR_HOST = IP của máy tính.
+const EMULATOR_HOST = import.meta.env.VITE_EMULATOR_HOST || '127.0.0.1';
+
 // Hai cờ độc lập: có thể để Firestore chạy Emulator (dữ liệu seed) mà đăng nhập Google THẬT (VITE_USE_AUTH_EMULATOR=false)
-if (import.meta.env.VITE_USE_EMULATOR === 'true') connectFirestoreEmulator(db, '127.0.0.1', 8085);
+if (import.meta.env.VITE_USE_EMULATOR === 'true') connectFirestoreEmulator(db, EMULATOR_HOST, 8085);
 const authEmulator = import.meta.env.VITE_USE_AUTH_EMULATOR ?? import.meta.env.VITE_USE_EMULATOR; // thiếu cờ riêng thì theo cờ chung
-if (authEmulator === 'true') connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+if (authEmulator === 'true') connectAuthEmulator(auth, 'http://' + EMULATOR_HOST + ':9099', { disableWarnings: true });
