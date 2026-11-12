@@ -49,7 +49,8 @@ export const labConfigs = {
     owner: 'TV1',
     title: 'Giao dịch: mua vé và giả lập lỗi thanh toán',
     subtitle: 'Kiểm tra rollback: khi thanh toán lỗi, ghế và đơn hàng có về đúng trạng thái ban đầu ở cả hai DBMS không.',
-    engines: { postgres: 'ACID · BEGIN/COMMIT/ROLLBACK', firestore: 'Transaction / batched write' },
+    engines: { postgres: 'ACID · BEGIN/COMMIT/ROLLBACK', firestore: 'Transaction · commit hoặc hủy ghi' },
+    note: 'Mỗi lần chạy dùng dữ liệu thử riêng và kiểm tra trước khi dọn. Firestore hủy các lệnh ghi chưa commit khi có lỗi. Thời gian gồm tạo dữ liệu, giao dịch, kiểm tra và dọn; không phải phép đo tốc độ giao dịch thuần. Bản ghi còn sót chỉ tính dữ liệu mua vé ngoài ý muốn sau lỗi.',
     params: [{ key: 'simulateFailure', label: 'Giả lập lỗi thanh toán', type: 'select', default: 'true', options: [['true', 'Có (phải rollback)'], ['false', 'Không (commit)']] }],
     metrics: [
       { label: 'Đã commit', value: (m) => (m.committed == null ? null : m.committed ? 'Có' : 'Không') },
