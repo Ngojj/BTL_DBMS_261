@@ -11,7 +11,7 @@ Lỗi: `{ "error": { "code", "message" } }`. Xác thực: `Authorization: Bearer
 | booking | POST /orders; POST /orders/:id/pay, /orders/:id/cancel; GET /orders | CUSTOMER |
 | tickets | GET /tickets/mine | CUSTOMER |
 | checkin | GET /checkin/events/:id/valid-tickets; POST /checkin/sync | STAFF |
-| reports | GET /admin/reports/revenue, /occupancy, /suspicious-accounts | ADMIN |
+| reports | GET /admin/reports/overview, /revenue, /revenue/daily, /occupancy, /suspicious-accounts | ADMIN |
 | reviews | GET,POST /events/:id/reviews; GET /events/:id/reviews/summary | – / CUSTOMER |
 | sync | POST /admin/sync/events/:id, /admin/sync/all | ADMIN |
 | labs | POST /admin/labs/<topic>/run; GET /admin/labs/<topic>/runs | ADMIN |
@@ -46,3 +46,33 @@ Lỗi: `400 VALIDATION` (phone sai định dạng), `401 INVALID_GOOGLE_TOKEN` (
 `POST /events/:id/reviews` body `{ rating: 1–5, comment }`; trùng (user, event) trả `409`.
 `GET /events/:id` cần có thêm `venueId` (form sửa sự kiện dùng). `POST /admin/sync/events/:id` và `/admin/sync/all`: frontend chỉ cần 2xx.
 Firestore `notifications/{userId}/items/{id}`: `{ message, read, createdAt }`.
+
+## Thống kê kinh doanh (reports) – loại truy vấn h
+
+Tham số lọc chung (đều tùy chọn): `eventId` (số nguyên dương), `from`, `to` (`YYYY-MM-DD`, theo giờ Việt Nam). Sai định dạng, ngày không tồn tại, `from` > `to` → `400 VALIDATION`. Chỉ ADMIN.
+
+**Doanh thu** = tổng giá các vé còn hiệu lực (`tickets.status <> 'CANCELLED'`) của đơn có một payment `SUCCESS`; ngày tính theo `payments.paid_at`. Đơn hủy đã hoàn tiền không tính. Con số khớp `SUM(payments.amount)` với status SUCCESS.
+
+| Endpoint | Trả về | Truy vấn |
+| --- | --- | --- |
+| `GET /admin/reports/overview` | `{ revenue, ticketsSold, paidOrders, avgOrderValue, avgTicketPrice, orders: { paid, cancelled, expired, pending }, cancelRate, seatCapacity, seatsSold, occupancyRate, checkedIn, checkInRate, topEvents: [{ eventId, title, revenue, tickets, share, aboveAverage }] }` | SUM, COUNT, FILTER; subquery AVG cho `aboveAverage` [g] |
+| `GET /admin/reports/revenue` | `[{ eventId, eventTitle, zone, ticketsSold, revenue }]` | JOIN 6 bảng + GROUP BY sự kiện × khu vực |
+| `GET /admin/reports/revenue/daily` | `[{ day, orders, tickets, revenue }]`, đủ mọi ngày trong khoảng (ngày trống = 0); mặc định 30 ngày gần nhất, tối đa 366 ngày | `generate_series` LEFT JOIN, GROUP BY ngày |
+| `GET /admin/reports/occupancy` | `[{ eventId, eventTitle, zone, capacity, sold, held, rate }]` (chỉ lọc theo `eventId`) | LEFT JOIN seats + COUNT FILTER |
+
+`cancelRate` = đơn hủy / (đơn đã thanh toán + đơn hủy); `share` và các tỷ lệ là phần trăm làm tròn 1 chữ số; `held` chỉ đếm ghế đang giữ chỗ còn hạn.
+
+## Phát hiện gom vé (reports) – loại truy vấn g
+
+`GET /admin/reports/suspicious-accounts` (chỉ ADMIN, không có tham số) trả mảng tài khoản bị gắn cờ, mức cao xếp trước:
+`[{ userId, email, fullName, phone, ticketCount, sharedPhoneAccounts, atLimitEvents, level: 'HIGH'|'MEDIUM', signals: [{ type, text }], reason }]`
+
+Chỉ tính vé còn hiệu lực (`status <> 'CANCELLED'`) của đơn `PAID`. Dấu hiệu (`signals[].type`):
+| type | Điều kiện | Mức |
+| --- | --- | --- |
+| `OVER_LIMIT` | một tài khoản mua nhiều hơn `events.max_tickets_per_user` của một sự kiện | HIGH |
+| `GROUP_OVER_LIMIT` | từ 2 tài khoản khách hàng chung số điện thoại, tổng vé cho một sự kiện vượt giới hạn của một người | HIGH |
+| `SHARED_PHONE` | từ 2 tài khoản khách hàng chung số điện thoại, chưa có bằng chứng mua vượt | MEDIUM |
+| `REPEAT_AT_LIMIT` | mua đủ giới hạn ở từ 3 sự kiện trở lên (2 sự kiện gắn cờ nhầm nhiều người mua bình thường) | MEDIUM |
+
+Trigger `ticket_rules` đã chặn việc một tài khoản vượt giới hạn, nên `OVER_LIMIT` chỉ xảy ra nếu dữ liệu bị sửa trực tiếp; đây là dấu hiệu kiểm tra chéo. Đây là dấu hiệu để admin xem xét, không phải kết luận gian lận.

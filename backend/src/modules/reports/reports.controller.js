@@ -5,6 +5,14 @@ import * as service from './reports.service.js';
 // Chỉ đọc request → gọi service → trả JSON. Không có SQL / nghiệp vụ ở đây.
 const input = (req) => ({ user: req.user, params: req.params, query: req.query, body: req.body });
 
+export const overview = asyncHandler(async (req, res) => {
+  res.json(await service.overview(input(req)));
+});
+
+export const revenueDaily = asyncHandler(async (req, res) => {
+  res.json(await service.revenueDaily(input(req)));
+});
+
 export const revenueByZone = asyncHandler(async (req, res) => {
   res.json(await service.revenueByZone(input(req)));
 });
