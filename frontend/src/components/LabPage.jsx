@@ -30,6 +30,14 @@ function MetricCard({ name, dot, engine, cfg, run, params, dbms }) {
         })}
       </div>
       {r && !r.ok && <p className="text-sm text-red-600 mt-3">{r.error}</p>}
+      {r?.ok && r.details && (
+        <details className="mt-4 text-sm">
+          <summary className="cursor-pointer font-semibold">Bằng chứng và trạng thái dữ liệu</summary>
+          <pre className="mt-2 max-h-96 overflow-auto rounded-lg bg-paper p-3 text-xs whitespace-pre-wrap break-words">
+            {JSON.stringify(r.details, null, 2)}
+          </pre>
+        </details>
+      )}
     </div>
   );
 }
@@ -106,6 +114,7 @@ export default function LabPage({ topic }) {
       <p className="text-xs font-bold tracking-widest text-gray-500">{cfg.eyebrow ?? 'DBMS LAB · ' + topic.replace(/-/g, ' ').toUpperCase()}</p>
       <h1 className="text-3xl font-extrabold tracking-tight mt-1">{cfg.title}</h1>
       <p className="text-gray-500 mt-1 mb-5">{cfg.subtitle}</p>
+      {cfg.note && <p className="text-sm text-gray-600 mb-5">{cfg.note}</p>}
 
       <div className="card p-4 flex flex-wrap gap-4 items-end mb-5">
         {cfg.params.map((p) => (
