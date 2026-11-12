@@ -95,3 +95,17 @@ Logic mua/hủy vé lấy từ nhánh `Data-Storage` (TV4), điều chỉnh theo
 Mã lỗi thường gặp của `POST /orders`: `SEAT_UNAVAILABLE` (ghế đã có người giữ/mua), `TICKET_LIMIT_EXCEEDED` (vượt `max_tickets_per_user`), `SALE_NOT_OPEN`, `EVENT_NOT_ON_SALE`, `EVENT_ENDED`, `SEAT_NOT_FOUND`, `SEAT_EVENT_MISMATCH` (đều 409/404).
 
 **Chống tranh chấp:** transaction khóa theo thứ tự `users` → `events` → `seats` (sắp theo `seat_id` để tránh deadlock) bằng `SELECT … FOR UPDATE`, đếm giới hạn vé sau khi đã khóa người dùng; đơn PENDING quá hạn được dọn ngay khi có người mua đúng ghế đó. Sau khi COMMIT, `modules/sync` ghi trạng thái ghế sang Firestore (`bulkWriter`, lỗi chỉ ghi log, không làm hỏng đơn đã commit).
+
+## Soát vé QR (checkin) – #7
+
+Luồng: nhân viên (STAFF) quét QR trên trình duyệt, tra và ghi `validTickets/{qrCode}.checkedIn` **trực tiếp vào Firestore** (chạy được khi mất mạng nhờ cache offline). Khi có mạng, frontend gọi `POST /checkin/sync`; backend đọc các vé đã `checkedIn` trong Firestore rồi cập nhật PostgreSQL (nguồn dữ liệu chính).
+
+| Endpoint (STAFF, ADMIN) | Mô tả |
+| --- | --- |
+| `GET /checkin/events/:eventId/valid-tickets` | `[{ qrCode, seatLabel, holderName, checkedIn, checkedInAt }]`: vé còn hiệu lực của đơn đã thanh toán (đối chiếu khi Firestore không với tới được) |
+| `POST /checkin/sync` body `{ eventId? }` | → `{ checkedInInFirestore, updated, alreadySynced, cancelled, unknown, malformed }`. Bỏ `eventId` = mọi sự kiện |
+
+Quy tắc đồng bộ: chỉ chuyển `VALID` → `CHECKED_IN`, giữ đúng giờ soát gốc (`checkedInAt` của Firestore); **idempotent**; vé của đơn đã hủy không bao giờ được soát (đếm vào `cancelled`); mã không có trong PostgreSQL đếm vào `unknown`; id không phải UUID đếm vào `malformed`.
+
+`validTickets` được giữ khớp với PostgreSQL: **thêm** khi thanh toán, **xóa** khi hủy đơn (`sync.syncOrderTickets`). `POST /admin/sync/events/:id` và `/admin/sync/all` **kéo lượt soát chưa đồng bộ về PostgreSQL trước** khi dựng lại, ghi `checkedIn` bằng merge (không bao giờ xóa một lượt soát offline chưa về), và dọn tài liệu của vé đã hủy (`removed`).
+Thiếu trường `checkedIn` trong `validTickets` nghĩa là chưa soát.

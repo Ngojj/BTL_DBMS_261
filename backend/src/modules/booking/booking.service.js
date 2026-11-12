@@ -2,7 +2,7 @@
 // Logic gốc: nhánh Data-Storage (TV4).
 import { AppError } from '../../utils/AppError.js';
 import * as repo from './booking.repository.js';
-import { syncEventSeats } from '../sync/sync.repository.js';
+import { syncEventSeats, syncOrderTickets } from '../sync/sync.repository.js';
 
 function ensureCustomer(input) {
   if (!input?.user?.userId) throw new AppError(401, 'UNAUTHENTICATED', 'Chưa đăng nhập');
@@ -10,9 +10,14 @@ function ensureCustomer(input) {
 }
 
 // Đồng bộ Firestore – best-effort, không chặn phản hồi và không làm hỏng nghiệp vụ đã commit
-function bgSync(eventId) {
-  if (!eventId) return;
-  syncEventSeats(Number(eventId)).catch((err) => console.error('[sync] đồng bộ ghế lỗi, sự kiện', eventId, '-', err.message));
+function bgSync(eventId, orderId) {
+  if (eventId) {
+    syncEventSeats(Number(eventId)).catch((err) => console.error('[sync] đồng bộ ghế lỗi, sự kiện', eventId, '-', err.message));
+  }
+  // Vé của đơn → validTickets (soát vé QR): thanh toán thì thêm, hủy thì xóa
+  if (orderId) {
+    syncOrderTickets(Number(orderId)).catch((err) => console.error('[sync] đồng bộ vé lỗi, đơn', orderId, '-', err.message));
+  }
 }
 
 export async function createOrder(input) {
@@ -30,14 +35,14 @@ export async function getOrder(input) {
 export async function payOrder(input) {
   ensureCustomer(input);
   const result = await repo.payOrder(input);
-  bgSync(result.eventId);
+  bgSync(result.eventId, result.orderId);
   return result;
 }
 
 export async function cancelOrder(input) {
   ensureCustomer(input);
   const result = await repo.cancelOrder(input);
-  bgSync(result.eventId);
+  bgSync(result.eventId, result.orderId);
   return result;
 }
 
