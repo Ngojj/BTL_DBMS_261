@@ -350,6 +350,10 @@ Giao diện dựng theo file mockup `TicketRush – Mockup giao diện.pdf` (6 m
 | Chuông thông báo (header) | `components/NotificationBell.jsx`, `lib/notifications.js` | Đọc Firestore `notifications/{userId}/items`; trạng thái "đã xem" lưu cục bộ |
 | `/login`, `/register` | `pages/LoginPage.jsx`, `RegisterPage.jsx` | Chưa có mockup |
 
+**Đã có backend thật cho mua vé:** `modules/booking` (#4, #5), `modules/tickets` (#6) và `modules/sync`. Với các API này frontend dùng dữ liệu thật; chỉ khi backend tắt hoặc trả 501 mới rơi về dữ liệu mẫu. Kiểm thử tự động nên đặt `VITE_USE_MOCK=false` để không vô tình dùng dữ liệu mẫu, và `VITE_FIRESTORE_CACHE=memory` (xem mục dưới).
+
+**Lưu ý cache offline của Firestore:** mặc định frontend dùng cache IndexedDB để trang soát vé chạy được khi mất mạng. Khi kiểm thử bằng Chrome headless và chuyển trang rất nhanh, cache này từng gây lỗi `FIRESTORE INTERNAL ASSERTION FAILED: Unexpected state` và sơ đồ ghế rơi về dữ liệu mẫu; đặt `VITE_FIRESTORE_CACHE=memory` thì hết lỗi (đổi lại mất khả năng soát vé offline). Chưa rõ trình duyệt thường có gặp không, TV5 cần kiểm tra.
+
 **Dữ liệu mẫu (mock).** Khi backend chưa làm một API (trả `501 NOT_IMPLEMENTED`) hoặc backend không chạy, và `VITE_USE_MOCK=true` trong `frontend/.env`, frontend tự dùng dữ liệu mẫu trong `src/api/mock.js` để xem được giao diện và chạy thử luồng mua vé. Backend làm xong API nào thì trang đó **tự chuyển sang dữ liệu thật**, không cần sửa frontend. Hình dạng dữ liệu trong `mock.js` chính là hợp đồng mà API thật cần trả về (chi tiết ở [docs/api.md](docs/api.md)). DBMS Lab **không có** dữ liệu mẫu để số liệu giả không lọt vào báo cáo. Khi backend đã đủ, đặt `VITE_USE_MOCK=false`.
 
 **Chuông thông báo** cần đăng nhập Firebase bằng custom token (`AuthContext.connectFirebase`), mà backend chỉ cấp được token này khi có `serviceAccount.json` hoặc Auth Emulator. Khi chưa có thì chuông hiện dữ liệu mẫu (nếu bật `VITE_USE_MOCK`) hoặc trống; các phần khác không bị ảnh hưởng.

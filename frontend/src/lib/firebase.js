@@ -4,7 +4,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import {
   initializeFirestore, connectFirestoreEmulator,
-  persistentLocalCache, persistentMultipleTabManager,
+  persistentLocalCache, persistentMultipleTabManager, memoryLocalCache,
 } from 'firebase/firestore';
 
 const app = initializeApp({
@@ -13,9 +13,14 @@ const app = initializeApp({
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
 });
 
-// Cache IndexedDB → trang soát vé đọc/ghi được khi mất mạng
+// Mặc định: cache IndexedDB → trang soát vé đọc/ghi được khi mất mạng.
+// VITE_FIRESTORE_CACHE=memory: chỉ cache trong bộ nhớ (mất offline). Dùng khi kiểm thử tự động: lúc chuyển trang rất nhanh trong
+// Chrome headless, cache IndexedDB từng gây lỗi "FIRESTORE INTERNAL ASSERTION FAILED: Unexpected state" và sơ đồ ghế rơi về dữ liệu mẫu.
+// TODO TV5: kiểm tra có gặp lỗi này trên trình duyệt thường không.
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  localCache: import.meta.env.VITE_FIRESTORE_CACHE === 'memory'
+    ? memoryLocalCache()
+    : persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
 export const auth = getAuth(app);
 
