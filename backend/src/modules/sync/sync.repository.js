@@ -129,3 +129,33 @@ export async function resyncAll() {
   }
   return { events: rows.length, seats, tickets };
 }
+
+// ---------------------------------------------------------------------------
+// Thông báo cho người dùng: notifications/{userId}/items/{id} = { message, read, createdAt }
+// Chỉ backend ghi (Security Rules cấm client ghi); client chỉ đọc và tự nhớ "đã xem" ở máy.
+// uid Firebase = String(users.user_id).
+// ---------------------------------------------------------------------------
+const vnd = (n) => Number(n).toLocaleString('vi-VN') + ' ₫';
+
+export async function publishNotification(userId, id, message) {
+  // id cố định → gọi lại (thử lại sau lỗi, gọi trùng) ghi đè chính tài liệu đó chứ không tạo thông báo thứ hai
+  await firestore.doc('notifications/' + userId + '/items/' + id).set({ message, read: false, createdAt: new Date() });
+}
+
+// Thông báo về một đơn hàng: kind = 'PAID' (thanh toán thành công) | 'CANCELLED' (đã hủy, hoàn tiền nếu đã thanh toán)
+export async function notifyOrder(orderId, kind) {
+  const { rows } = await pool.query(
+    `SELECT o.user_id, o.total, e.title,
+            (SELECT COUNT(*) FROM tickets t WHERE t.order_id = o.order_id)::int AS tickets,
+            EXISTS (SELECT 1 FROM payments p WHERE p.order_id = o.order_id AND p.status = 'REFUNDED') AS refunded
+       FROM orders o JOIN events e ON e.event_id = o.event_id
+      WHERE o.order_id = $1`,
+    [orderId],
+  );
+  const o = rows[0];
+  if (!o) return;
+  const message = kind === 'PAID'
+    ? `Thanh toán thành công ${o.tickets} vé "${o.title}" (${vnd(o.total)}). Vé và mã QR đã có ở mục Vé của tôi.`
+    : `Đã hủy đơn #${orderId} (${o.tickets} vé "${o.title}").${o.refunded ? ' Tiền được hoàn lại ' + vnd(o.total) + '.' : ' Ghế đã được trả về.'}`;
+  await publishNotification(String(o.user_id), kind.toLowerCase() + '-' + orderId, message);
+}

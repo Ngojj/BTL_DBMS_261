@@ -2,7 +2,7 @@
 // Logic gốc: nhánh Data-Storage (TV4).
 import { AppError } from '../../utils/AppError.js';
 import * as repo from './booking.repository.js';
-import { syncEventSeats, syncOrderTickets } from '../sync/sync.repository.js';
+import { syncEventSeats, syncOrderTickets, notifyOrder, inBackground } from '../sync/sync.repository.js';
 
 function ensureCustomer(input) {
   if (!input?.user?.userId) throw new AppError(401, 'UNAUTHENTICATED', 'Chưa đăng nhập');
@@ -36,6 +36,8 @@ export async function payOrder(input) {
   ensureCustomer(input);
   const result = await repo.payOrder(input);
   bgSync(result.eventId, result.orderId);
+  // Chỉ báo khi vừa thanh toán thật sự (không báo lại khi gọi lần hai, không báo khi đơn đã hết hạn)
+  if (result.paid && !result.already) inBackground('thông báo thanh toán', notifyOrder(result.orderId, 'PAID'));
   return result;
 }
 
@@ -43,6 +45,7 @@ export async function cancelOrder(input) {
   ensureCustomer(input);
   const result = await repo.cancelOrder(input);
   bgSync(result.eventId, result.orderId);
+  if (result.cancelled && !result.already) inBackground('thông báo hủy đơn', notifyOrder(result.orderId, 'CANCELLED'));
   return result;
 }
 

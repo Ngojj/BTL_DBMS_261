@@ -519,5 +519,5 @@ npm --prefix backend test            # kiểm thử không cần dịch vụ (nh
 npm --prefix backend run test:e2e    # đầu-cuối: cần backend + PostgreSQL đã seed + Firestore Emulator
 ```
 
-`test:e2e` gồm `admin-crud` (76 phép: #8 sự kiện, #9 khu vực và sinh ghế, đánh giá, đồng bộ Firestore) và `booking` (48 phép: mua vé với 20 người giành 1 ghế, đơn song song vượt giới hạn, hết hạn giữ chỗ, hoàn tiền). Các bài này **tạo, sửa, xóa dữ liệu**, nên chỉ chạy trên cơ sở dữ liệu dev rồi `npm run seed` lại.
+`test:e2e` gồm `notifications` (11 phép: thông báo thanh toán/hủy, không trùng lặp), `admin-crud` (76 phép: #8 sự kiện, #9 khu vực và sinh ghế, đánh giá, đồng bộ Firestore) và `booking` (48 phép: mua vé với 20 người giành 1 ghế, đơn song song vượt giới hạn, hết hạn giữ chỗ, hoàn tiền). Các bài này **tạo, sửa, xóa dữ liệu**, nên chỉ chạy trên cơ sở dữ liệu dev rồi `npm run seed` lại.
 

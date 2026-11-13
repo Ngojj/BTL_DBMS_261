@@ -146,7 +146,8 @@ export async function payOrder(input = {}) {
     const order = result.rows[0];
     if (!order) throw new AppError(404, 'NOT_FOUND', 'Không tìm thấy đơn hàng');
     if (Number(order.user_id) !== userId) throw new AppError(403, 'FORBIDDEN', 'Bạn không có quyền thanh toán đơn này');
-    if (order.status === 'PAID') return { orderId: String(orderId), eventId: String(order.event_id), status: 'PAID', paid: true };
+    // already: true = đơn đã thanh toán từ trước, lần gọi này không làm gì (không gửi thông báo lần nữa)
+    if (order.status === 'PAID') return { orderId: String(orderId), eventId: String(order.event_id), status: 'PAID', paid: true, already: true };
     if (order.status !== 'PENDING') throw new AppError(409, 'ORDER_NOT_PAYABLE', 'Đơn hàng không thể thanh toán');
     if (new Date(order.expires_at) <= new Date()) {
       await expireOrders(client, [orderId]);
@@ -187,7 +188,7 @@ export async function cancelOrder(input = {}) {
     const order = result.rows[0];
     if (!order) throw new AppError(404, 'NOT_FOUND', 'Không tìm thấy đơn hàng');
     if (Number(order.user_id) !== userId) throw new AppError(403, 'FORBIDDEN', 'Bạn không có quyền hủy đơn này');
-    if (order.status === 'CANCELLED') return { cancelled: true, orderId: String(orderId), eventId: String(order.event_id), status: 'CANCELLED' };
+    if (order.status === 'CANCELLED') return { cancelled: true, orderId: String(orderId), eventId: String(order.event_id), status: 'CANCELLED', already: true };
     if (order.status === 'EXPIRED') return { cancelled: false, orderId: String(orderId), eventId: String(order.event_id), status: 'EXPIRED' };
 
     const ticketResult = await client.query('SELECT ticket_id, seat_id, status FROM tickets WHERE order_id = $1 FOR UPDATE', [orderId]);
