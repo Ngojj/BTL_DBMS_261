@@ -109,3 +109,20 @@ Quy tắc đồng bộ: chỉ chuyển `VALID` → `CHECKED_IN`, giữ đúng gi
 
 `validTickets` được giữ khớp với PostgreSQL: **thêm** khi thanh toán, **xóa** khi hủy đơn (`sync.syncOrderTickets`). `POST /admin/sync/events/:id` và `/admin/sync/all` **kéo lượt soát chưa đồng bộ về PostgreSQL trước** khi dựng lại, ghi `checkedIn` bằng merge (không bao giờ xóa một lượt soát offline chưa về), và dọn tài liệu của vé đã hủy (`removed`).
 Thiếu trường `checkedIn` trong `validTickets` nghĩa là chưa soát.
+
+## Quản lý sự kiện, khu vực, địa điểm (#8, #9)
+
+| Endpoint | Quyền | Mô tả |
+| --- | --- | --- |
+| `GET /events` | công khai | chỉ sự kiện `ON_SALE` hoặc `SOLD_OUT`; lọc `genreId`, `city`, `dateFrom`, `dateTo`, `priceMin`, `priceMax` |
+| `GET /events/manage` | ADMIN, STAFF | **mọi trạng thái** (DRAFT, ENDED, CANCELLED…), cùng bộ lọc. Trang quản trị và soát vé dùng cái này, vì sự kiện mới tạo là DRAFT và sẽ không hiện ở `GET /events` |
+| `GET /events/venues` | công khai | `[{ venueId, name, city, address }]` cho ô chọn địa điểm |
+| `POST /events`, `PUT /events/:id`, `DELETE /events/:id` | ADMIN | tạo, sửa, xóa. Xóa sự kiện đã có đơn hàng → `409 EVENT_HAS_DEPENDENCIES` |
+| `POST /events/:id/zones`, `PUT /zones/:id`, `DELETE /zones/:id` | ADMIN | trùng tên khu trong một sự kiện → `409`; xóa khu đã có vé → `409 ZONE_HAS_TICKETS` (xóa thành công trả `204`) |
+| `POST /zones/:id/generate-seats` body `{ seatsPerRow }` | ADMIN | sinh đủ `capacity` ghế, **tự chia hàng A, B, C…** theo số ghế mỗi hàng (không nhận danh sách hàng); gọi lại không tạo ghế trùng |
+
+Lưu ý: `GET /events/:id/zones` và `POST /events/:id/zones` trả tên trường dạng `zone_id`, `event_id` (snake_case) còn `GET /events/:id` trả `zoneId` (camelCase); giao diện đã chấp nhận cả hai.
+
+**Đồng bộ Firestore khi quản trị:** sinh ghế, xóa khu vực và xóa sự kiện tự cập nhật `events/{id}/seats` (chạy nền, lỗi chỉ ghi log). Sinh ghế → khách thấy ngay sơ đồ; xóa khu → ghế bị dọn khỏi sơ đồ; xóa sự kiện → dọn ghế và vé hợp lệ. Nút "Đồng bộ" của admin vẫn dùng để dựng lại thủ công.
+
+Quy trình thiết lập một sự kiện: tạo (mặc định DRAFT, chỉ admin thấy) → thêm khu vực và giá → sinh ghế → đổi trạng thái sang ON_SALE để khách thấy.

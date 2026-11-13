@@ -20,7 +20,7 @@ export default function CheckinPage() {
   const gate = params.get('gate') ?? '1';
   const online = useOnline();
   const { firebaseReady } = useAuth();
-  const events = useAsync(() => eventsApi.list(), []);
+  const events = useAsync(() => eventsApi.listAll(), []);
   const [eventId, setEventId] = useState(params.get('eventId') ?? '');
   const [result, setResult] = useState(null);
   const [checked, setChecked] = useState(0);

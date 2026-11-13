@@ -6,7 +6,8 @@ import { AppError } from '../../utils/AppError.js';
 import { syncCheckins } from '../checkin/checkin.repository.js';
 
 // Trạng thái ghế của một sự kiện → events/{id}/seats/* và events/{id}.zonesSummary
-// Gọi sau mỗi createOrder / payOrder / cancelOrder. Ghế HELD đã quá hạn được coi là AVAILABLE.
+// Gọi sau mỗi createOrder / payOrder / cancelOrder và sau khi admin sinh ghế / xóa khu vực. Ghế HELD đã quá hạn được coi là AVAILABLE.
+// Tài liệu ghế không còn trong PostgreSQL (khu vực bị xóa) cũng bị xóa khỏi Firestore, để khách không chọn phải ghế ma.
 export async function syncEventSeats(eventId) {
   const { rows } = await pool.query(
     `SELECT s.seat_id, s.held_by, s.held_until, s.row_label, s.seat_no, z.name AS zone_name, z.zone_id, e.title, e.event_date,
@@ -17,7 +18,6 @@ export async function syncEventSeats(eventId) {
       WHERE z.event_id = $1`,
     [eventId],
   );
-  if (!rows.length) return { seats: 0 };
 
   const writer = firestore.bulkWriter();
   const eventRef = firestore.collection('events').doc(String(eventId));
@@ -32,9 +32,33 @@ export async function syncEventSeats(eventId) {
     z.total += 1;
     if (expired) z.left += 1;
   }
-  writer.set(eventRef, { title: rows[0].title, date: rows[0].event_date, zonesSummary: zones }, { merge: true });
+
+  // dọn tài liệu ghế không còn tồn tại (listDocuments chỉ lấy tên, không tốn lượt đọc nội dung)
+  const keep = new Set(rows.map((r) => String(r.seat_id)));
+  let removed = 0;
+  for (const d of await eventRef.collection('seats').listDocuments()) {
+    if (!keep.has(d.id)) { writer.delete(d); removed++; }
+  }
+
+  if (rows.length) writer.set(eventRef, { title: rows[0].title, date: rows[0].event_date, zonesSummary: zones }, { merge: true });
+  else if (removed) writer.set(eventRef, { zonesSummary: {} }, { merge: true });
   await writer.close();
-  return { seats: rows.length };
+  return { seats: rows.length, removed };
+}
+
+// Xóa hẳn sự kiện khỏi Firestore (ghế, vé hợp lệ còn sót) sau khi admin xóa sự kiện ở PostgreSQL
+export async function removeEvent(eventId) {
+  await firestore.recursiveDelete(firestore.collection('events').doc(String(eventId)));
+  const stale = await firestore.collection('validTickets').where('eventId', '==', String(eventId)).get();
+  const writer = firestore.bulkWriter();
+  for (const d of stale.docs) writer.delete(d.ref);
+  await writer.close();
+  return { removedTickets: stale.size };
+}
+
+// Chạy nền: đồng bộ lỗi chỉ ghi log, không được làm hỏng thao tác của admin đã commit ở PostgreSQL
+export function inBackground(label, promise) {
+  Promise.resolve(promise).catch((err) => console.error('[sync] ' + label + ' lỗi -', err.message));
 }
 
 // Dữ liệu một vé trong validTickets. checkedIn chỉ được ghi khi PostgreSQL đã là CHECKED_IN: ghi bằng merge để KHÔNG ghi đè
