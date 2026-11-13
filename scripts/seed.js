@@ -13,7 +13,8 @@ import { fileURLToPath } from 'node:url';
 
 // ---------- Nạp cấu hình từ backend (script không có node_modules riêng) ----------
 const backendDir = fileURLToPath(new URL('../backend/', import.meta.url));
-process.loadEnvFile(backendDir + '.env');
+// SEED_ENV_FILE: dùng tệp cấu hình khác (VD backend/.env.cloud trỏ tới PostgreSQL và Firestore trên mạng), không lẫn với .env local
+process.loadEnvFile(process.env.SEED_ENV_FILE ?? backendDir + '.env');
 const requireBackend = createRequire(backendDir + 'package.json');
 const bcrypt = requireBackend('bcrypt');
 const { pool, withTransaction } = await import('../backend/src/config/pg.js');
@@ -26,9 +27,28 @@ const arg = (name, def) => {
   return i === -1 ? def : argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : true;
 };
 const N_CUSTOMERS = Number(arg('users', 300));
+// Mật khẩu mặc định chỉ để dev (nằm công khai trong README). Khi seed lên mạng hãy đặt mật khẩu riêng:
+// SEED_ADMIN_PASSWORD, SEED_STAFF_PASSWORD, SEED_CUSTOMER_PASSWORD
+const PW = {
+  admin: process.env.SEED_ADMIN_PASSWORD ?? 'Admin@123',
+  staff: process.env.SEED_STAFF_PASSWORD ?? 'Staff@123',
+  customer: process.env.SEED_CUSTOMER_PASSWORD ?? '123456',
+};
+const customPw = Boolean(process.env.SEED_ADMIN_PASSWORD || process.env.SEED_STAFF_PASSWORD || process.env.SEED_CUSTOMER_PASSWORD);
 const SEED = Number(arg('seed', 42));
 const PG_ONLY = argv.includes('--pg-only');
 const FS_ONLY = argv.includes('--fs-only');
+
+// ---------- Khóa an toàn: không xóa nhầm dữ liệu trên mạng ----------
+// Script TRUNCATE toàn bộ bảng, nên nếu DATABASE_URL không phải máy cá nhân thì phải có cờ --yes-cloud.
+// Muốn ghi vào Firestore THẬT (không phải Emulator) cũng phải có cờ --yes-cloud.
+const dbHost = (() => { try { return new URL(process.env.DATABASE_URL).hostname; } catch { return ''; } })();
+const dbIsLocal = ['localhost', '127.0.0.1', '::1', 'host.docker.internal'].includes(dbHost);
+const CLOUD_OK = argv.includes('--yes-cloud');
+if (!FS_ONLY && !dbIsLocal && !CLOUD_OK) {
+  console.error('✘ DATABASE_URL trỏ tới "' + dbHost + '" (không phải máy cá nhân). Seed sẽ XÓA SẠCH dữ liệu ở đó.\n  Nếu đúng ý, chạy lại với --yes-cloud.');
+  process.exit(1);
+}
 
 // ---------- Tiện ích ----------
 function mulberry32(a) {
@@ -95,7 +115,7 @@ const METHODS = ['CARD', 'E_WALLET', 'BANK_TRANSFER'];
 // =====================================================================
 async function seedPostgres() {
   console.log('▶ PostgreSQL: xóa dữ liệu cũ và sinh dữ liệu mới…');
-  const [hAdmin, hStaff, hCustomer] = await Promise.all(['Admin@123', 'Staff@123', '123456'].map((p) => bcrypt.hash(p, 10)));
+  const [hAdmin, hStaff, hCustomer] = await Promise.all([PW.admin, PW.staff, PW.customer].map((p) => bcrypt.hash(p, 10)));
 
   await withTransaction(async (db) => {
     await db.query('TRUNCATE reviews, payments, tickets, orders, seats, zones, events, venues, genres, users RESTART IDENTITY CASCADE');
@@ -276,13 +296,18 @@ async function seedPostgres() {
 // =====================================================================
 async function seedFirestore() {
   const host = process.env.FIRESTORE_EMULATOR_HOST;
-  if (!host) throw new Error('Chưa đặt FIRESTORE_EMULATOR_HOST trong backend/.env (script chỉ ghi vào Emulator để tránh ghi nhầm Firestore thật)');
-  try {
-    await fetch('http://' + host, { signal: AbortSignal.timeout(2500) });
-  } catch {
-    throw new Error('Không kết nối được Firestore Emulator tại ' + host + '. Chạy: firebase emulators:start --config firebase/firebase.json');
+  if (host) {
+    try {
+      await fetch('http://' + host, { signal: AbortSignal.timeout(2500) });
+    } catch {
+      throw new Error('Không kết nối được Firestore Emulator tại ' + host + '. Chạy: firebase emulators:start --config firebase/firebase.json');
+    }
+    console.log('▶ Firestore Emulator (' + host + '): dựng lại events/, validTickets/, notifications/…');
+  } else {
+    // Firestore thật: cần khóa dịch vụ (GOOGLE_APPLICATION_CREDENTIALS hoặc FIREBASE_SERVICE_ACCOUNT_JSON) và cờ --yes-cloud
+    if (!CLOUD_OK) throw new Error('Không có FIRESTORE_EMULATOR_HOST: script sẽ ghi vào Firestore THẬT của dự án ' + process.env.FIREBASE_PROJECT_ID + '. Nếu đúng ý, chạy lại với --yes-cloud.');
+    console.log('▶ Firestore THẬT (dự án ' + process.env.FIREBASE_PROJECT_ID + '): dựng lại events/, validTickets/, notifications/…');
   }
-  console.log('▶ Firestore Emulator (' + host + '): dựng lại events/, validTickets/, notifications/…');
   for (const col of ['events', 'validTickets', 'notifications']) await firestore.recursiveDelete(firestore.collection(col));
 
   const { rows: seats } = await pool.query(
@@ -331,10 +356,13 @@ try {
   if (!FS_ONLY) await seedPostgres();
   if (!PG_ONLY) await seedFirestore();
   console.log('\n✔ Xong. Tài khoản đăng nhập:');
-  console.log('  ADMIN     admin@ticketrush.vn   / Admin@123');
-  console.log('  STAFF     staff1@ticketrush.vn  / Staff@123   (staff2@… cùng mật khẩu)');
-  console.log('  CUSTOMER  khach@example.com     / 123456      (tài khoản demo, có 2 vé Rock B7 B8)');
-  console.log('  Mọi khách hàng khác: mật khẩu 123456. Gom vé để test #11: scalper@example.com, acc.a|b|c@example.com (chung số 0977123456)');
+  if (customPw) console.log('  Mật khẩu lấy từ SEED_ADMIN_PASSWORD / SEED_STAFF_PASSWORD / SEED_CUSTOMER_PASSWORD (không in ra).');
+  else {
+    console.log('  ADMIN     admin@ticketrush.vn   / Admin@123');
+    console.log('  STAFF     staff1@ticketrush.vn  / Staff@123   (staff2@… cùng mật khẩu)');
+    console.log('  CUSTOMER  khach@example.com     / 123456      (tài khoản demo, có 2 vé Rock B7 B8)');
+    console.log('  Mọi khách hàng khác: mật khẩu 123456. Gom vé để test #11: scalper@example.com, acc.a|b|c@example.com (chung số 0977123456)');
+  }
   await pool.end();
   process.exit(0);
 } catch (e) {

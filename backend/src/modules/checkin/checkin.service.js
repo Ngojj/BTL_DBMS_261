@@ -1,14 +1,12 @@
-// TODO [checkin.service] Phụ trách: TV5 (#7)
+// [checkin.service] #7 soát vé. Phụ trách: TV5
 import * as repo from './checkin.repository.js';
 
-// Nghiệp vụ + điều phối transaction. Không viết SQL ở đây (SQL nằm trong repository).
-
-// TODO [d] #7 – danh sách vé hợp lệ (nạp/đối chiếu với Firestore validTickets)
+// [d] danh sách vé hợp lệ của sự kiện
 export async function listValidTickets(input) {
   return repo.listValidTickets(input);
 }
 
-// TODO [c] #7 – nhận danh sách checkedIn từ cổng, cập nhật tickets.status = CHECKED_IN trong PostgreSQL
+// [c] đồng bộ các lượt soát (Firestore) về PostgreSQL
 export async function syncCheckins(input) {
   return repo.syncCheckins(input);
 }

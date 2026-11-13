@@ -341,7 +341,7 @@ Giao diện dựng theo file mockup `TicketRush – Mockup giao diện.pdf` (6 m
 | `/events/:id` | `pages/EventDetailPage.jsx`, `lib/seats.js` | Sơ đồ ghế realtime + giỏ ghế |
 | `/checkout/:orderId` | `pages/CheckoutPage.jsx` | Thanh toán + đếm ngược giữ ghế 10 phút |
 | `/my-tickets` | `pages/MyTicketsPage.jsx` | Vé của tôi + mã QR (giao diện điện thoại, lưu offline) |
-| `/staff/checkin` | `pages/CheckinPage.jsx`, `components/QrScanner.jsx`, `lib/checkin.js` | Soát vé QR (giao diện tối, ngoại tuyến) |
+| `/staff/checkin` | `pages/CheckinPage.jsx`, `components/QrScanner.jsx`, `lib/checkin.js` | Soát vé QR (giao diện tối). Chạy được khi mất mạng; có mạng lại thì tự đồng bộ về PostgreSQL. Backend `modules/checkin` đã hiện thực |
 | `/admin/labs/<topic>` | `components/LabPage.jsx`, `pages/lab/labConfigs.js` | DBMS Lab (Concurrency control là bản mockup, 5 topic còn lại dùng chung khung) |
 | `/admin/events`, `zones` | `pages/AdminEventsPage.jsx`, `AdminZonesPage.jsx` | Chưa có mockup. Thêm, sửa, xóa; sinh ghế; nút **Đồng bộ** từng sự kiện và **Đồng bộ tất cả** sang Firestore (module `sync`) |
 | `/admin/reports` | `pages/AdminReportsPage.jsx`, `components/RevenueChart.jsx` | Thống kê kinh doanh (#10): 6 chỉ số, biểu đồ doanh thu theo ngày, top sự kiện, lấp đầy, bảng theo khu vực; lọc theo sự kiện và khoảng ngày. Backend `modules/reports` đã hiện thực |
@@ -349,6 +349,12 @@ Giao diện dựng theo file mockup `TicketRush – Mockup giao diện.pdf` (6 m
 | Khối đánh giá (cuối trang `/events/:id`) | `components/Reviews.jsx` | Điểm trung bình, danh sách, gửi đánh giá (mỗi người một lần) |
 | Chuông thông báo (header) | `components/NotificationBell.jsx`, `lib/notifications.js` | Đọc Firestore `notifications/{userId}/items`; trạng thái "đã xem" lưu cục bộ |
 | `/login`, `/register` | `pages/LoginPage.jsx`, `RegisterPage.jsx` | Chưa có mockup |
+
+**Đã có backend thật cho mua vé:** `modules/booking` (#4, #5), `modules/tickets` (#6) và `modules/sync`. Với các API này frontend dùng dữ liệu thật; chỉ khi backend tắt hoặc trả 501 mới rơi về dữ liệu mẫu. Kiểm thử tự động nên đặt `VITE_USE_MOCK=false` để không vô tình dùng dữ liệu mẫu, và `VITE_FIRESTORE_CACHE=memory` (xem mục dưới).
+
+**Soát vé (#7)** (`/staff/checkin`): cần Security Rules thật, tức là phải đăng nhập Firebase bằng custom token mà backend cấp (`POST /api/auth/firebase-token`). Token này chỉ ký được khi chạy **Auth Emulator** (`firebase emulators:start --only auth,firestore ...` cùng `FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099` cho backend và `VITE_USE_AUTH_EMULATOR=true` cho frontend) hoặc khi có `serviceAccount.json`. Cấu hình mặc định trong `.env.example` đã đúng kiểu emulator. Chỉ tài khoản **STAFF** đọc/ghi được `validTickets` theo Security Rules (ADMIN vào được trang nhưng Firestore sẽ từ chối).
+
+**Lưu ý cache offline của Firestore:** mặc định frontend dùng cache IndexedDB để trang soát vé chạy được khi mất mạng. Khi kiểm thử bằng Chrome headless và chuyển trang rất nhanh, cache này từng gây lỗi `FIRESTORE INTERNAL ASSERTION FAILED: Unexpected state` và sơ đồ ghế rơi về dữ liệu mẫu; đặt `VITE_FIRESTORE_CACHE=memory` thì hết lỗi (đổi lại mất khả năng soát vé offline). Chưa rõ trình duyệt thường có gặp không, TV5 cần kiểm tra.
 
 **Dữ liệu mẫu (mock).** Khi backend chưa làm một API (trả `501 NOT_IMPLEMENTED`) hoặc backend không chạy, và `VITE_USE_MOCK=true` trong `frontend/.env`, frontend tự dùng dữ liệu mẫu trong `src/api/mock.js` để xem được giao diện và chạy thử luồng mua vé. Backend làm xong API nào thì trang đó **tự chuyển sang dữ liệu thật**, không cần sửa frontend. Hình dạng dữ liệu trong `mock.js` chính là hợp đồng mà API thật cần trả về (chi tiết ở [docs/api.md](docs/api.md)). DBMS Lab **không có** dữ liệu mẫu để số liệu giả không lọt vào báo cáo. Khi backend đã đủ, đặt `VITE_USE_MOCK=false`.
 

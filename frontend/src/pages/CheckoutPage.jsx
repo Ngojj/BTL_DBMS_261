@@ -56,8 +56,12 @@ export default function CheckoutPage() {
     setBusy(true);
     setError(null);
     try {
-      await bookingApi.pay(orderId, { method, buyer });
-      setDone(true);
+      const res = await bookingApi.pay(orderId, { method, buyer });
+      // Đơn hết hạn giữ ghế: backend trả 200 kèm paid:false (đã trả ghế về trống) – không được báo thành công
+      if (res?.paid === false || (res?.status && res.status !== 'PAID')) {
+        setError('Đơn hàng đã hết hạn giữ ghế, ghế đã được trả về trạng thái trống. Vui lòng chọn lại.');
+        order.reload();
+      } else setDone(true);
     } catch (e) {
       setError(e.message);
     } finally {

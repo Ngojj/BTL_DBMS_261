@@ -76,3 +76,36 @@ Chỉ tính vé còn hiệu lực (`status <> 'CANCELLED'`) của đơn `PAID`. 
 | `REPEAT_AT_LIMIT` | mua đủ giới hạn ở từ 3 sự kiện trở lên (2 sự kiện gắn cờ nhầm nhiều người mua bình thường) | MEDIUM |
 
 Trigger `ticket_rules` đã chặn việc một tài khoản vượt giới hạn, nên `OVER_LIMIT` chỉ xảy ra nếu dữ liệu bị sửa trực tiếp; đây là dấu hiệu kiểm tra chéo. Đây là dấu hiệu để admin xem xét, không phải kết luận gian lận.
+
+## Mua vé, vé của tôi, đồng bộ Firestore (đã hiện thực)
+
+Logic mua/hủy vé lấy từ nhánh `Data-Storage` (TV4), điều chỉnh theo hợp đồng của frontend. Chỉ tài khoản CUSTOMER mua/hủy được (ADMIN, STAFF nhận 403).
+
+| Endpoint | Body / trả về |
+| --- | --- |
+| `POST /orders` | body `{ eventId, seatIds: [] }` → `{ orderId, eventId, total, status: 'PENDING', expiresAt, ticketCount, tickets }`. Giữ ghế 10 phút |
+| `GET /orders/:orderId` | `{ orderId, eventId, eventTitle, eventDate, venueName, city, status, total, expiresAt, items: [{ seatId, seatLabel, zone, price }] }`; chỉ chủ đơn xem được (403 nếu khác) |
+| `POST /orders/:orderId/pay` | body `{ method: 'CARD'\|'E_WALLET'\|'BANK_TRANSFER', buyer? }` → `{ orderId, eventId, status: 'PAID', paid: true, amount }`. Gọi lần hai vẫn an toàn |
+| `POST /orders/:orderId/cancel` | → `{ cancelled, orderId, eventId, status: 'CANCELLED' }`. Đơn đã thanh toán: payment chuyển `REFUNDED`, ghế trả về `AVAILABLE` |
+| `GET /orders` | đơn của tôi |
+| `GET /tickets/mine` | `[{ ticketId, orderId, qrCode, status, price, checkedInAt, eventId, eventTitle, eventDate, venueName, city, zone, seatLabel, holderName }]`; chỉ vé của đơn đã thanh toán, vé của đơn đã hủy hiện `CANCELLED` |
+| `POST /admin/sync/events/:id` | đồng bộ lại ghế và vé hợp lệ của một sự kiện → `{ eventId, seats, tickets }` |
+| `POST /admin/sync/all` | đồng bộ lại tất cả → `{ events, seats, tickets }` |
+
+Mã lỗi thường gặp của `POST /orders`: `SEAT_UNAVAILABLE` (ghế đã có người giữ/mua), `TICKET_LIMIT_EXCEEDED` (vượt `max_tickets_per_user`), `SALE_NOT_OPEN`, `EVENT_NOT_ON_SALE`, `EVENT_ENDED`, `SEAT_NOT_FOUND`, `SEAT_EVENT_MISMATCH` (đều 409/404).
+
+**Chống tranh chấp:** transaction khóa theo thứ tự `users` → `events` → `seats` (sắp theo `seat_id` để tránh deadlock) bằng `SELECT … FOR UPDATE`, đếm giới hạn vé sau khi đã khóa người dùng; đơn PENDING quá hạn được dọn ngay khi có người mua đúng ghế đó. Sau khi COMMIT, `modules/sync` ghi trạng thái ghế sang Firestore (`bulkWriter`, lỗi chỉ ghi log, không làm hỏng đơn đã commit).
+
+## Soát vé QR (checkin) – #7
+
+Luồng: nhân viên (STAFF) quét QR trên trình duyệt, tra và ghi `validTickets/{qrCode}.checkedIn` **trực tiếp vào Firestore** (chạy được khi mất mạng nhờ cache offline). Khi có mạng, frontend gọi `POST /checkin/sync`; backend đọc các vé đã `checkedIn` trong Firestore rồi cập nhật PostgreSQL (nguồn dữ liệu chính).
+
+| Endpoint (STAFF, ADMIN) | Mô tả |
+| --- | --- |
+| `GET /checkin/events/:eventId/valid-tickets` | `[{ qrCode, seatLabel, holderName, checkedIn, checkedInAt }]`: vé còn hiệu lực của đơn đã thanh toán (đối chiếu khi Firestore không với tới được) |
+| `POST /checkin/sync` body `{ eventId? }` | → `{ checkedInInFirestore, updated, alreadySynced, cancelled, unknown, malformed }`. Bỏ `eventId` = mọi sự kiện |
+
+Quy tắc đồng bộ: chỉ chuyển `VALID` → `CHECKED_IN`, giữ đúng giờ soát gốc (`checkedInAt` của Firestore); **idempotent**; vé của đơn đã hủy không bao giờ được soát (đếm vào `cancelled`); mã không có trong PostgreSQL đếm vào `unknown`; id không phải UUID đếm vào `malformed`.
+
+`validTickets` được giữ khớp với PostgreSQL: **thêm** khi thanh toán, **xóa** khi hủy đơn (`sync.syncOrderTickets`). `POST /admin/sync/events/:id` và `/admin/sync/all` **kéo lượt soát chưa đồng bộ về PostgreSQL trước** khi dựng lại, ghi `checkedIn` bằng merge (không bao giờ xóa một lượt soát offline chưa về), và dọn tài liệu của vé đã hủy (`removed`).
+Thiếu trường `checkedIn` trong `validTickets` nghĩa là chưa soát.
