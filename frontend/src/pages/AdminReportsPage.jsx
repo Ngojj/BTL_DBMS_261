@@ -69,8 +69,8 @@ export default function AdminReportsPage() {
             </select>
           </Field>
         </div>
-        <Field label="Từ ngày"><input type="date" className="input" value={filters.from} max={filters.to || undefined} onChange={set('from')} /></Field>
-        <Field label="Đến ngày"><input type="date" className="input" value={filters.to} min={filters.from || undefined} onChange={set('to')} /></Field>
+        <div className="w-[calc(50%-0.5rem)] sm:w-auto"><Field label="Từ ngày"><input type="date" className="input" value={filters.from} max={filters.to || undefined} onChange={set('from')} /></Field></div>
+        <div className="w-[calc(50%-0.5rem)] sm:w-auto"><Field label="Đến ngày"><input type="date" className="input" value={filters.to} min={filters.from || undefined} onChange={set('to')} /></Field></div>
         <div className="flex gap-2 flex-wrap">
           {PRESETS.map(([label, range]) => (
             <button
@@ -145,7 +145,7 @@ export default function AdminReportsPage() {
 
           <section className="card overflow-x-auto">
             <h2 className="font-bold text-lg px-5 pt-5">Doanh thu theo sự kiện và khu vực</h2>
-            <table className="w-full mt-2">
+            <table className="w-full mt-2 min-w-[520px]">
               <thead><tr><th className="th">Sự kiện</th><th className="th">Khu vực</th><th className="th text-right">Vé bán</th><th className="th text-right">Doanh thu</th></tr></thead>
               <tbody>
                 {revenue.data?.map((r) => (

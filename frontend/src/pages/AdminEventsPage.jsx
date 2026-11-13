@@ -144,7 +144,7 @@ export default function AdminEventsPage() {
         <ErrorBox error={events.error} />
         {events.data && (
           <div className="card overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[980px]">
               <thead><tr><th className="th">Sự kiện</th><th className="th">Thời gian</th><th className="th">Địa điểm</th><th className="th">Giá từ</th><th className="th">Trạng thái</th><th className="th" /></tr></thead>
               <tbody>
                 {events.data.map((ev) => (
