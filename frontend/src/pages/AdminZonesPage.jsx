@@ -147,7 +147,7 @@ export default function AdminZonesPage() {
         <ErrorBox error={zones.error} />
         {zones.data && (
           <div className="card overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[820px]">
               <thead>
                 <tr>
                   <th className="th">Khu vực</th>

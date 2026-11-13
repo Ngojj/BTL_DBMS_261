@@ -57,7 +57,7 @@ export default function AdminSuspiciousPage() {
 
       {rows.length > 0 && (
         <div className="card overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[720px]">
             <thead>
               <tr>
                 <th className="th">Mức</th><th className="th">Tài khoản</th><th className="th">Số điện thoại</th>

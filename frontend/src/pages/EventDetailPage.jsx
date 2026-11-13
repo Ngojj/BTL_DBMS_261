@@ -133,16 +133,19 @@ export default function EventDetailPage() {
   };
 
   return (
-    <>
-    <div className="grid gap-6 lg:grid-cols-[1fr_350px] items-start">
-      <section className="card p-5 sm:p-7">
+    // pb-24: chừa chỗ cho thanh "Giữ ghế" cố định ở đáy (điện thoại) để không che phần cuối trang
+    <div className={selected.length ? 'pb-24 lg:pb-0' : ''}>
+    {/* minmax(0,1fr) + min-w-0: sơ đồ ghế rộng 640px phải cuộn BÊN TRONG thẻ, không được làm cả trang rộng ra ngoài màn hình */}
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_350px] items-start">
+      <section className="card p-4 sm:p-7 min-w-0">
         <Link to="/" className="text-sm font-bold text-brand">← Tất cả sự kiện</Link>
-        <h1 className="text-3xl font-extrabold tracking-tight mt-1">{e.title}</h1>
+        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">{e.title}</h1>
         <p className="text-gray-600 mb-5">
           {timeStr(e.eventDate)} · {fullDate(e.eventDate)} · {e.venueName}, {e.city}
         </p>
 
-        <div className="overflow-x-auto pb-2">
+        <p className="sm:hidden text-xs text-gray-500 mb-2">← Vuốt ngang để xem hết sơ đồ →</p>
+        <div className="overflow-x-auto pb-2 -mx-1 px-1">
           <div className="min-w-[640px]">
             <div className="mx-auto max-w-[590px] bg-ink text-white text-center rounded-b-[36px] py-3 text-sm font-bold tracking-[0.25em] mb-5">
               SÂN KHẤU
@@ -163,7 +166,7 @@ export default function EventDetailPage() {
         </div>
       </section>
 
-      <aside className="space-y-4 lg:sticky lg:top-4">
+      <aside className="space-y-4 lg:sticky lg:top-4 min-w-0">
         <div className="card p-5">
           <h2 className="font-bold text-lg mb-3">Giá vé</h2>
           <ul className="space-y-2 text-[15px]">
@@ -194,7 +197,7 @@ export default function EventDetailPage() {
                   <button
                     aria-label={'Bỏ ghế ' + s.row + s.number}
                     onClick={() => toggle(s)}
-                    className="w-8 h-8 rounded-lg bg-white border border-black/10 hover:bg-black/5"
+                    className="w-10 h-10 sm:w-8 sm:h-8 rounded-lg bg-white border border-black/10 hover:bg-black/5"
                   >
                     ✕
                   </button>
@@ -218,7 +221,21 @@ export default function EventDetailPage() {
         </div>
       </aside>
     </div>
+    {selected.length > 0 && (
+      <div className="lg:hidden fixed inset-x-0 bottom-0 z-30 bg-white border-t border-black/10 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="max-w-6xl mx-auto flex items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-xs text-gray-500">{selected.length} / {max} ghế</p>
+            <p className="text-xl font-extrabold leading-tight">{money(total)}</p>
+          </div>
+          <button className="btn-brand flex-1 py-3 text-base" disabled={busy} onClick={hold}>
+            {busy ? 'Đang giữ ghế…' : 'Giữ ghế và thanh toán'}
+          </button>
+        </div>
+        {msg && <p className="text-xs text-red-600 mt-2">{msg}</p>}
+      </div>
+    )}
     <Reviews eventId={eventId} />
-    </>
+    </div>
   );
 }
