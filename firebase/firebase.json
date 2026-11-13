@@ -18,19 +18,5 @@
       "port": 4001
     },
     "singleProjectMode": true
-  },
-  "hosting": {
-    "public": "../frontend/dist",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ]
   }
 }
