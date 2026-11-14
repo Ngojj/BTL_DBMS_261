@@ -16,6 +16,7 @@ import AdminEventsPage from './pages/AdminEventsPage.jsx';
 import AdminZonesPage from './pages/AdminZonesPage.jsx';
 import AdminReportsPage from './pages/AdminReportsPage.jsx';
 import AdminSuspiciousPage from './pages/AdminSuspiciousPage.jsx';
+import AdminQueuePage from './pages/AdminQueuePage.jsx';
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="zones" element={<AdminZonesPage />} />
         <Route path="reports" element={<AdminReportsPage />} />
         <Route path="suspicious" element={<AdminSuspiciousPage />} />
+        <Route path="queue" element={<AdminQueuePage />} />
         {Object.keys(labConfigs).map((topic) => (
           <Route key={topic} path={'labs/' + topic} element={<LabPage topic={topic} />} />
         ))}
