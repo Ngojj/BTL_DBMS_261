@@ -138,3 +138,17 @@ Backend ghi `notifications/{userId}/items/{id}` = `{ message, read: false, creat
 | Hủy đơn chưa thanh toán | `cancelled-{orderId}` | "Đã hủy đơn #id (N vé …). Ghế đã được trả về." |
 
 Id cố định nên gọi lại không tạo thông báo thứ hai; ngoài ra chỉ gửi khi trạng thái thật sự đổi (`paid && !already`, `cancelled && !already`). Không gửi khi giữ ghế, khi đơn hết hạn, hoặc khi người không phải chủ đơn bị từ chối (403). Gửi nền, lỗi chỉ ghi log, không làm hỏng giao dịch đã commit.
+
+## Phòng chờ ảo (#3)
+
+Bật/tắt theo từng sự kiện. Khi **bật**, `POST /orders` trả `403 QUEUE_REQUIRED` nếu khách chưa được cho vào. Nếu Firestore lỗi thì không chặn bán vé. Dữ liệu nằm ở Firestore: `queues/{eventId}` (`enabled`, `next`, `admittedUpTo`) và `queues/{eventId}/entries/{userId}` (`seq`, `joinedAt`). Số thứ tự cấp trong transaction; "cho N người vào" chỉ tăng con trỏ `admittedUpTo`.
+
+| Endpoint | Quyền | Kết quả |
+|---|---|---|
+| `POST /events/:id/queue/join` | CUSTOMER | như `status` sau khi vào hàng (vào lại giữ số cũ) |
+| `GET /events/:id/queue/status` | đăng nhập | `{ enabled, inQueue, admitted, position, peopleAhead, estimatedWaitSeconds, waiting }` |
+| `POST /events/:id/queue/leave` | đăng nhập | `{ left: true }` |
+| `GET /events/:id/queue` | ADMIN | `{ enabled, next, admittedUpTo }` |
+| `PUT /events/:id/queue` body `{ enabled }` | ADMIN | bật/tắt |
+| `POST /events/:id/queue/admit` body `{ count }` (1–500) | ADMIN | `{ admitted, admittedUpTo, waiting }` |
+| `DELETE /events/:id/queue` | ADMIN | xóa hàng đợi, đặt lại từ đầu |

@@ -6,6 +6,7 @@ import { eventsApi } from '../api/eventsApi.js';
 import { bookingApi } from '../api/bookingApi.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSeats } from '../lib/seats.js';
+import WaitingRoom, { useWaitingRoom } from '../components/WaitingRoom.jsx';
 import { useAsync } from '../lib/useAsync.js';
 import { fullDate, money, timeStr } from '../lib/format.js';
 import { ErrorBox, Loading } from '../components/ui.jsx';
@@ -66,6 +67,7 @@ export default function EventDetailPage() {
   const location = useLocation();
   const event = useAsync(() => eventsApi.get(eventId), [eventId]);
   const { seats } = useSeats(eventId);
+  const room = useWaitingRoom(eventId, user);
   const [selected, setSelected] = useState([]);
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -110,6 +112,7 @@ export default function EventDetailPage() {
 
   async function hold() {
     if (!user) return navigate('/login', { state: { from: location.pathname } });
+    if (room.blocked) return setMsg('Sự kiện đang dùng phòng chờ ảo: hãy xếp hàng và chờ được cho vào.');
     setBusy(true);
     setMsg(null);
     try {
@@ -143,6 +146,8 @@ export default function EventDetailPage() {
         <p className="text-gray-600 mb-5">
           {timeStr(e.eventDate)} · {fullDate(e.eventDate)} · {e.venueName}, {e.city}
         </p>
+
+        <WaitingRoom room={room} />
 
         <p className="sm:hidden text-xs text-gray-500 mb-2">← Vuốt ngang để xem hết sơ đồ →</p>
         <div className="overflow-x-auto pb-2 -mx-1 px-1">
@@ -213,7 +218,7 @@ export default function EventDetailPage() {
               <span className="text-gray-600">Tạm tính</span>
               <span className="text-2xl font-extrabold">{money(total)}</span>
             </div>
-            <button className="btn-brand w-full py-3 text-base" disabled={selected.length === 0 || busy} onClick={hold}>
+            <button className="btn-brand w-full py-3 text-base" disabled={selected.length === 0 || busy || room.blocked} onClick={hold}>
               {busy ? 'Đang giữ ghế…' : 'Giữ ghế và thanh toán'}
             </button>
             <p className="text-xs text-gray-500 text-center mt-3">Ghế được giữ cho bạn trong 10 phút.</p>
@@ -228,7 +233,7 @@ export default function EventDetailPage() {
             <p className="text-xs text-gray-500">{selected.length} / {max} ghế</p>
             <p className="text-xl font-extrabold leading-tight">{money(total)}</p>
           </div>
-          <button className="btn-brand flex-1 py-3 text-base" disabled={busy} onClick={hold}>
+          <button className="btn-brand flex-1 py-3 text-base" disabled={busy || room.blocked} onClick={hold}>
             {busy ? 'Đang giữ ghế…' : 'Giữ ghế và thanh toán'}
           </button>
         </div>
