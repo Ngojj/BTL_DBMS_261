@@ -7,6 +7,7 @@ const main = [
   ['/admin/zones', 'Khu vực và giá vé'],
   ['/admin/reports', 'Thống kê doanh thu'],
   ['/admin/suspicious', 'Phát hiện gom vé'],
+  ['/admin/queue', 'Phòng chờ ảo'],
 ];
 export const labLinks = [
   ['data-storage', 'Data storage'],

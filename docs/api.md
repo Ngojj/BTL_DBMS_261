@@ -109,3 +109,17 @@ Quy tắc đồng bộ: chỉ chuyển `VALID` → `CHECKED_IN`, giữ đúng gi
 
 `validTickets` được giữ khớp với PostgreSQL: **thêm** khi thanh toán, **xóa** khi hủy đơn (`sync.syncOrderTickets`). `POST /admin/sync/events/:id` và `/admin/sync/all` **kéo lượt soát chưa đồng bộ về PostgreSQL trước** khi dựng lại, ghi `checkedIn` bằng merge (không bao giờ xóa một lượt soát offline chưa về), và dọn tài liệu của vé đã hủy (`removed`).
 Thiếu trường `checkedIn` trong `validTickets` nghĩa là chưa soát.
+
+## Phòng chờ ảo (#3)
+
+Bật/tắt theo từng sự kiện. Khi **bật**, `POST /orders` trả `403 QUEUE_REQUIRED` nếu khách chưa được cho vào. Nếu Firestore lỗi thì không chặn bán vé. Dữ liệu nằm ở Firestore: `queues/{eventId}` (`enabled`, `next`, `admittedUpTo`) và `queues/{eventId}/entries/{userId}` (`seq`, `joinedAt`). Số thứ tự cấp trong transaction; "cho N người vào" chỉ tăng con trỏ `admittedUpTo`.
+
+| Endpoint | Quyền | Kết quả |
+|---|---|---|
+| `POST /events/:id/queue/join` | CUSTOMER | như `status` sau khi vào hàng (vào lại giữ số cũ) |
+| `GET /events/:id/queue/status` | đăng nhập | `{ enabled, inQueue, admitted, position, peopleAhead, estimatedWaitSeconds, waiting }` |
+| `POST /events/:id/queue/leave` | đăng nhập | `{ left: true }` |
+| `GET /events/:id/queue` | ADMIN | `{ enabled, next, admittedUpTo }` |
+| `PUT /events/:id/queue` body `{ enabled }` | ADMIN | bật/tắt |
+| `POST /events/:id/queue/admit` body `{ count }` (1–500) | ADMIN | `{ admitted, admittedUpTo, waiting }` |
+| `DELETE /events/:id/queue` | ADMIN | xóa hàng đợi, đặt lại từ đầu |
