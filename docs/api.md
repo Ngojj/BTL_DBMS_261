@@ -126,3 +126,17 @@ Lưu ý: `GET /events/:id/zones` và `POST /events/:id/zones` trả tên trườ
 **Đồng bộ Firestore khi quản trị:** sinh ghế, xóa khu vực và xóa sự kiện tự cập nhật `events/{id}/seats` (chạy nền, lỗi chỉ ghi log). Sinh ghế → khách thấy ngay sơ đồ; xóa khu → ghế bị dọn khỏi sơ đồ; xóa sự kiện → dọn ghế và vé hợp lệ. Nút "Đồng bộ" của admin vẫn dùng để dựng lại thủ công.
 
 Quy trình thiết lập một sự kiện: tạo (mặc định DRAFT, chỉ admin thấy) → thêm khu vực và giá → sinh ghế → đổi trạng thái sang ON_SALE để khách thấy.
+
+## Phòng chờ ảo (#3)
+
+Bật/tắt theo từng sự kiện. Khi **bật**, `POST /orders` trả `403 QUEUE_REQUIRED` nếu khách chưa được cho vào. Nếu Firestore lỗi thì không chặn bán vé. Dữ liệu nằm ở Firestore: `queues/{eventId}` (`enabled`, `next`, `admittedUpTo`) và `queues/{eventId}/entries/{userId}` (`seq`, `joinedAt`). Số thứ tự cấp trong transaction; "cho N người vào" chỉ tăng con trỏ `admittedUpTo`.
+
+| Endpoint | Quyền | Kết quả |
+|---|---|---|
+| `POST /events/:id/queue/join` | CUSTOMER | như `status` sau khi vào hàng (vào lại giữ số cũ) |
+| `GET /events/:id/queue/status` | đăng nhập | `{ enabled, inQueue, admitted, position, peopleAhead, estimatedWaitSeconds, waiting }` |
+| `POST /events/:id/queue/leave` | đăng nhập | `{ left: true }` |
+| `GET /events/:id/queue` | ADMIN | `{ enabled, next, admittedUpTo }` |
+| `PUT /events/:id/queue` body `{ enabled }` | ADMIN | bật/tắt |
+| `POST /events/:id/queue/admit` body `{ count }` (1–500) | ADMIN | `{ admitted, admittedUpTo, waiting }` |
+| `DELETE /events/:id/queue` | ADMIN | xóa hàng đợi, đặt lại từ đầu |

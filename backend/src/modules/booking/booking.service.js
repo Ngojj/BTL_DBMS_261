@@ -2,6 +2,7 @@
 // Logic gốc: nhánh Data-Storage (TV4).
 import { AppError } from '../../utils/AppError.js';
 import * as repo from './booking.repository.js';
+import { assertCanBuy } from '../queue/queue.service.js';
 import { syncEventSeats, syncOrderTickets } from '../sync/sync.repository.js';
 
 function ensureCustomer(input) {
@@ -22,6 +23,7 @@ function bgSync(eventId, orderId) {
 
 export async function createOrder(input) {
   ensureCustomer(input);
+  await assertCanBuy(Number(input.body?.eventId), input.user); // phòng chờ ảo (#3)
   const result = await repo.createOrder(input);
   bgSync(result.eventId);
   return result;
