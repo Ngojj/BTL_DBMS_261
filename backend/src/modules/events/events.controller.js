@@ -9,6 +9,14 @@ export const listGenres = asyncHandler(async (req, res) => {
   res.json(await service.listGenres(input(req)));
 });
 
+export const listAllEvents = asyncHandler(async (req, res) => {
+  res.json(await service.listAllEvents(input(req)));
+});
+
+export const listVenues = asyncHandler(async (_req, res) => {
+  res.json(await service.listVenues());
+});
+
 export const listEvents = asyncHandler(async (req, res) => {
   res.json(await service.listEvents(input(req)));
 });

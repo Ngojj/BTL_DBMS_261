@@ -110,6 +110,35 @@ Quy tắc đồng bộ: chỉ chuyển `VALID` → `CHECKED_IN`, giữ đúng gi
 `validTickets` được giữ khớp với PostgreSQL: **thêm** khi thanh toán, **xóa** khi hủy đơn (`sync.syncOrderTickets`). `POST /admin/sync/events/:id` và `/admin/sync/all` **kéo lượt soát chưa đồng bộ về PostgreSQL trước** khi dựng lại, ghi `checkedIn` bằng merge (không bao giờ xóa một lượt soát offline chưa về), và dọn tài liệu của vé đã hủy (`removed`).
 Thiếu trường `checkedIn` trong `validTickets` nghĩa là chưa soát.
 
+## Quản lý sự kiện, khu vực, địa điểm (#8, #9)
+
+| Endpoint | Quyền | Mô tả |
+| --- | --- | --- |
+| `GET /events` | công khai | chỉ sự kiện `ON_SALE` hoặc `SOLD_OUT`; lọc `genreId`, `city`, `dateFrom`, `dateTo`, `priceMin`, `priceMax` |
+| `GET /events/manage` | ADMIN, STAFF | **mọi trạng thái** (DRAFT, ENDED, CANCELLED…), cùng bộ lọc. Trang quản trị và soát vé dùng cái này, vì sự kiện mới tạo là DRAFT và sẽ không hiện ở `GET /events` |
+| `GET /events/venues` | công khai | `[{ venueId, name, city, address }]` cho ô chọn địa điểm |
+| `POST /events`, `PUT /events/:id`, `DELETE /events/:id` | ADMIN | tạo, sửa, xóa. Xóa sự kiện đã có đơn hàng → `409 EVENT_HAS_DEPENDENCIES` |
+| `POST /events/:id/zones`, `PUT /zones/:id`, `DELETE /zones/:id` | ADMIN | trùng tên khu trong một sự kiện → `409`; xóa khu đã có vé → `409 ZONE_HAS_TICKETS` (xóa thành công trả `204`) |
+| `POST /zones/:id/generate-seats` body `{ seatsPerRow }` | ADMIN | sinh đủ `capacity` ghế, **tự chia hàng A, B, C…** theo số ghế mỗi hàng (không nhận danh sách hàng); gọi lại không tạo ghế trùng |
+
+Lưu ý: `GET /events/:id/zones` và `POST /events/:id/zones` trả tên trường dạng `zone_id`, `event_id` (snake_case) còn `GET /events/:id` trả `zoneId` (camelCase); giao diện đã chấp nhận cả hai.
+
+**Đồng bộ Firestore khi quản trị:** sinh ghế, xóa khu vực và xóa sự kiện tự cập nhật `events/{id}/seats` (chạy nền, lỗi chỉ ghi log). Sinh ghế → khách thấy ngay sơ đồ; xóa khu → ghế bị dọn khỏi sơ đồ; xóa sự kiện → dọn ghế và vé hợp lệ. Nút "Đồng bộ" của admin vẫn dùng để dựng lại thủ công.
+
+Quy trình thiết lập một sự kiện: tạo (mặc định DRAFT, chỉ admin thấy) → thêm khu vực và giá → sinh ghế → đổi trạng thái sang ON_SALE để khách thấy.
+
+## Thông báo (chuông)
+
+Backend ghi `notifications/{userId}/items/{id}` = `{ message, read: false, createdAt }` (uid Firebase = `String(users.user_id)`). Security Rules chỉ cho **chính chủ đọc**, không ai ghi được từ trình duyệt. Frontend nghe realtime (`lib/notifications.js`); trạng thái "đã xem" lưu cục bộ (`localStorage`) vì client không ghi được.
+
+| Sự kiện | Id tài liệu | Nội dung |
+| --- | --- | --- |
+| Thanh toán thành công | `paid-{orderId}` | "Thanh toán thành công N vé "Tên sự kiện" (số tiền). Vé và mã QR đã có ở mục Vé của tôi." |
+| Hủy đơn đã thanh toán | `cancelled-{orderId}` | "Đã hủy đơn #id (N vé …). Tiền được hoàn lại số tiền." |
+| Hủy đơn chưa thanh toán | `cancelled-{orderId}` | "Đã hủy đơn #id (N vé …). Ghế đã được trả về." |
+
+Id cố định nên gọi lại không tạo thông báo thứ hai; ngoài ra chỉ gửi khi trạng thái thật sự đổi (`paid && !already`, `cancelled && !already`). Không gửi khi giữ ghế, khi đơn hết hạn, hoặc khi người không phải chủ đơn bị từ chối (403). Gửi nền, lỗi chỉ ghi log, không làm hỏng giao dịch đã commit.
+
 ## Phòng chờ ảo (#3)
 
 Bật/tắt theo từng sự kiện. Khi **bật**, `POST /orders` trả `403 QUEUE_REQUIRED` nếu khách chưa được cho vào. Nếu Firestore lỗi thì không chặn bán vé. Dữ liệu nằm ở Firestore: `queues/{eventId}` (`enabled`, `next`, `admittedUpTo`) và `queues/{eventId}/entries/{userId}` (`seq`, `joinedAt`). Số thứ tự cấp trong transaction; "cho N người vào" chỉ tăng con trỏ `admittedUpTo`.

@@ -1,6 +1,7 @@
 // TODO [zones.service] Phụ trách: TV2 (#9)
 import { AppError } from "../../utils/AppError.js";
 import * as repo from "./zones.repository.js";
+import { syncEventSeats, inBackground } from "../sync/sync.repository.js";
 
 const toPositiveInt = (value, field) => {
   const n = Number(value);
@@ -155,6 +156,9 @@ export async function deleteZone({ params }) {
     throw new AppError(404, "NOT_FOUND", "Không tìm thấy khu vực");
   }
 
+  // Ghế của khu vực đã bị xóa theo (cascade): dọn khỏi sơ đồ ghế realtime
+  inBackground("dọn ghế sau khi xóa khu vực", syncEventSeats(Number(current.event_id)));
+
   return {
     deleted: true,
     zone: deleted,
@@ -183,9 +187,12 @@ export async function generateSeats({ params, body = {} }) {
     seatNo: (index % seatsPerRow) + 1,
   }));
 
-  return repo.generateSeats({
+  const result = await repo.generateSeats({
     params: { zoneId },
     body: { seatRows },
   });
+  // Đẩy ghế mới sang Firestore để khách thấy ngay sơ đồ (không phải chờ admin bấm "Đồng bộ")
+  inBackground("đồng bộ ghế sau khi sinh ghế", syncEventSeats(Number(zone.event_id)));
+  return result;
   // return repo.generateSeats(input);
 }

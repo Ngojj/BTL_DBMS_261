@@ -1,6 +1,7 @@
 //[events.service] Phụ trách: TV1 (#1, #8) + TV2 (#2)
 import * as repo from './events.repository.js';
 import { AppError } from '../../utils/AppError.js';
+import { removeEvent, inBackground } from '../sync/sync.repository.js';
 
 // Nghiệp vụ + điều phối transaction. Không viết SQL ở đây (SQL nằm trong repository).
 
@@ -35,7 +36,18 @@ export async function listEvents(input) {
     query.genreId = genreId;
   }
 
-  return repo.listEvents({ ...input, query });
+  return repo.listEvents({ ...input, query, includeAll: input.includeAll === true });
+}
+
+// Danh sách đầy đủ mọi trạng thái (DRAFT, ENDED, CANCELLED…) cho trang quản trị và soát vé.
+// Cùng bộ lọc với listEvents. Trang công khai chỉ thấy sự kiện đang bán.
+export async function listAllEvents(input) {
+  const rows = await listEvents({ ...input, includeAll: true });
+  return rows;
+}
+
+export async function listVenues() {
+  return repo.listVenues();
 }
 
 export async function getEvent(input) {
@@ -272,6 +284,9 @@ export async function deleteEvent({ params }) {
         'Không tìm thấy sự kiện',
       );
     }
+
+    // Dọn sơ đồ ghế và vé hợp lệ của sự kiện đã xóa khỏi Firestore
+    inBackground('dọn Firestore sau khi xóa sự kiện', removeEvent(eventId));
 
     return { deleted: true, event };
   } catch (err) {

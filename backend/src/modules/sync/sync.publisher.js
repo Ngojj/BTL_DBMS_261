@@ -18,7 +18,4 @@ export async function publishValidTicket(ticket) {
   void ticket;
 }
 
-// TODO: notifications/{userId}/items/{id} <- { message, read, createdAt }
-export async function publishNotification(userId, message) {
-  void userId; void message;
-}
+// Thông báo đã được hiện thực ở sync.repository.js (publishNotification, notifyOrder)

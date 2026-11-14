@@ -511,3 +511,13 @@ Mỗi lần chạy tự lưu thành file JSON ở `backend/lab-results/<topic>/`
 | Sau `docker compose down -v` mất hết dữ liệu | Đúng như dự kiến (xóa volume). Nạp lại bằng `scripts/seed.js` |
 
 Thắc mắc khác: xem [docs/assumptions.md](docs/assumptions.md) (các giả định khi dựng khung) và [docs/architecture.md](docs/architecture.md).
+
+## Kiểm thử tự động
+
+```bash
+npm --prefix backend test            # kiểm thử không cần dịch vụ (nhanh)
+npm --prefix backend run test:e2e    # đầu-cuối: cần backend + PostgreSQL đã seed + Firestore Emulator
+```
+
+`test:e2e` gồm `notifications` (11 phép: thông báo thanh toán/hủy, không trùng lặp), `admin-crud` (76 phép: #8 sự kiện, #9 khu vực và sinh ghế, đánh giá, đồng bộ Firestore) và `booking` (48 phép: mua vé với 20 người giành 1 ghế, đơn song song vượt giới hạn, hết hạn giữ chỗ, hoàn tiền). Các bài này **tạo, sửa, xóa dữ liệu**, nên chỉ chạy trên cơ sở dữ liệu dev rồi `npm run seed` lại.
+

@@ -46,7 +46,7 @@ export default function AdminReportsPage() {
   const query = useMemo(() => ({ eventId: filters.eventId, from: filters.from, to: filters.to }), [filters]);
   const set = (k) => (e) => { setPreset(null); setFilters({ ...filters, [k]: e.target.value }); };
 
-  const events = useAsync(() => eventsApi.list(), []);
+  const events = useAsync(() => eventsApi.listAll(), []);
   const overview = useAsync(() => adminApi.overview(query), [query]);
   const daily = useAsync(() => adminApi.revenueDaily(query), [query]);
   const revenue = useAsync(() => adminApi.revenue(query), [query]);

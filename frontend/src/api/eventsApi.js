@@ -3,6 +3,18 @@ import * as mock from "./mock.js";
 
 // query: { genreId, city, dateFrom, dateTo, priceMin, priceMax }  (#1 lọc thể loại, #2 lọc kết hợp)
 export const eventsApi = {
+  // Mọi sự kiện, mọi trạng thái (DRAFT, ENDED…): dùng cho trang quản trị và soát vé. Trang công khai dùng list().
+  listAll: (query) =>
+    withMock(
+      () => api("/events/manage", { query }),
+      () => mock.listEvents(query),
+    ),
+  // [{ venueId, name, city, address }] cho ô chọn địa điểm
+  venues: () =>
+    withMock(
+      () => api("/events/venues"),
+      () => mock.venues,
+    ),
   genres: () =>
     withMock(
       () => api("/events/genres"),

@@ -3,6 +3,12 @@
 
 const iso = (s) => new Date(s + "+07:00").toISOString();
 
+export const venues = [
+  { venueId: 1, name: 'Nhà thi đấu Phú Thọ', city: 'TP. HCM', address: '1 Lý Thường Kiệt, Q.11' },
+  { venueId: 2, name: 'SVĐ Quân khu 7', city: 'TP. HCM', address: '202 Hoàng Văn Thụ, Q.Phú Nhuận' },
+  { venueId: 3, name: 'Công viên bờ sông', city: 'Đà Nẵng', address: 'Đường Trần Hưng Đạo, Q.Sơn Trà' },
+];
+
 export const genres = [
   { genreId: 1, name: "Pop" },
   { genreId: 2, name: "Rock" },

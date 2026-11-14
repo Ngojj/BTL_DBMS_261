@@ -6,7 +6,8 @@ import { AppError } from '../../utils/AppError.js';
 import { syncCheckins } from '../checkin/checkin.repository.js';
 
 // Trạng thái ghế của một sự kiện → events/{id}/seats/* và events/{id}.zonesSummary
-// Gọi sau mỗi createOrder / payOrder / cancelOrder. Ghế HELD đã quá hạn được coi là AVAILABLE.
+// Gọi sau mỗi createOrder / payOrder / cancelOrder và sau khi admin sinh ghế / xóa khu vực. Ghế HELD đã quá hạn được coi là AVAILABLE.
+// Tài liệu ghế không còn trong PostgreSQL (khu vực bị xóa) cũng bị xóa khỏi Firestore, để khách không chọn phải ghế ma.
 export async function syncEventSeats(eventId) {
   const { rows } = await pool.query(
     `SELECT s.seat_id, s.held_by, s.held_until, s.row_label, s.seat_no, z.name AS zone_name, z.zone_id, e.title, e.event_date,
@@ -17,7 +18,6 @@ export async function syncEventSeats(eventId) {
       WHERE z.event_id = $1`,
     [eventId],
   );
-  if (!rows.length) return { seats: 0 };
 
   const writer = firestore.bulkWriter();
   const eventRef = firestore.collection('events').doc(String(eventId));
@@ -32,9 +32,33 @@ export async function syncEventSeats(eventId) {
     z.total += 1;
     if (expired) z.left += 1;
   }
-  writer.set(eventRef, { title: rows[0].title, date: rows[0].event_date, zonesSummary: zones }, { merge: true });
+
+  // dọn tài liệu ghế không còn tồn tại (listDocuments chỉ lấy tên, không tốn lượt đọc nội dung)
+  const keep = new Set(rows.map((r) => String(r.seat_id)));
+  let removed = 0;
+  for (const d of await eventRef.collection('seats').listDocuments()) {
+    if (!keep.has(d.id)) { writer.delete(d); removed++; }
+  }
+
+  if (rows.length) writer.set(eventRef, { title: rows[0].title, date: rows[0].event_date, zonesSummary: zones }, { merge: true });
+  else if (removed) writer.set(eventRef, { zonesSummary: {} }, { merge: true });
   await writer.close();
-  return { seats: rows.length };
+  return { seats: rows.length, removed };
+}
+
+// Xóa hẳn sự kiện khỏi Firestore (ghế, vé hợp lệ còn sót) sau khi admin xóa sự kiện ở PostgreSQL
+export async function removeEvent(eventId) {
+  await firestore.recursiveDelete(firestore.collection('events').doc(String(eventId)));
+  const stale = await firestore.collection('validTickets').where('eventId', '==', String(eventId)).get();
+  const writer = firestore.bulkWriter();
+  for (const d of stale.docs) writer.delete(d.ref);
+  await writer.close();
+  return { removedTickets: stale.size };
+}
+
+// Chạy nền: đồng bộ lỗi chỉ ghi log, không được làm hỏng thao tác của admin đã commit ở PostgreSQL
+export function inBackground(label, promise) {
+  Promise.resolve(promise).catch((err) => console.error('[sync] ' + label + ' lỗi -', err.message));
 }
 
 // Dữ liệu một vé trong validTickets. checkedIn chỉ được ghi khi PostgreSQL đã là CHECKED_IN: ghi bằng merge để KHÔNG ghi đè
@@ -104,4 +128,34 @@ export async function resyncAll() {
     tickets += (await syncValidTickets(id)).tickets;
   }
   return { events: rows.length, seats, tickets };
+}
+
+// ---------------------------------------------------------------------------
+// Thông báo cho người dùng: notifications/{userId}/items/{id} = { message, read, createdAt }
+// Chỉ backend ghi (Security Rules cấm client ghi); client chỉ đọc và tự nhớ "đã xem" ở máy.
+// uid Firebase = String(users.user_id).
+// ---------------------------------------------------------------------------
+const vnd = (n) => Number(n).toLocaleString('vi-VN') + ' ₫';
+
+export async function publishNotification(userId, id, message) {
+  // id cố định → gọi lại (thử lại sau lỗi, gọi trùng) ghi đè chính tài liệu đó chứ không tạo thông báo thứ hai
+  await firestore.doc('notifications/' + userId + '/items/' + id).set({ message, read: false, createdAt: new Date() });
+}
+
+// Thông báo về một đơn hàng: kind = 'PAID' (thanh toán thành công) | 'CANCELLED' (đã hủy, hoàn tiền nếu đã thanh toán)
+export async function notifyOrder(orderId, kind) {
+  const { rows } = await pool.query(
+    `SELECT o.user_id, o.total, e.title,
+            (SELECT COUNT(*) FROM tickets t WHERE t.order_id = o.order_id)::int AS tickets,
+            EXISTS (SELECT 1 FROM payments p WHERE p.order_id = o.order_id AND p.status = 'REFUNDED') AS refunded
+       FROM orders o JOIN events e ON e.event_id = o.event_id
+      WHERE o.order_id = $1`,
+    [orderId],
+  );
+  const o = rows[0];
+  if (!o) return;
+  const message = kind === 'PAID'
+    ? `Thanh toán thành công ${o.tickets} vé "${o.title}" (${vnd(o.total)}). Vé và mã QR đã có ở mục Vé của tôi.`
+    : `Đã hủy đơn #${orderId} (${o.tickets} vé "${o.title}").${o.refunded ? ' Tiền được hoàn lại ' + vnd(o.total) + '.' : ' Ghế đã được trả về.'}`;
+  await publishNotification(String(o.user_id), kind.toLowerCase() + '-' + orderId, message);
 }

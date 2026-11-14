@@ -19,10 +19,8 @@ export async function listGenres(input) {
 export async function listEvents(input) {
   const query = input.query ?? {};
   const values = [];
-  const where = [
-    // Không hiển thị sự kiện nháp, đã hủy hoặc đã kết thúc trên trang sự kiện sắp diễn ra.
-    `e.status IN ('ON_SALE', 'SOLD_OUT')`,
-  ];
+  // Trang công khai không hiện sự kiện nháp, đã hủy hoặc đã kết thúc. includeAll (chỉ quản trị/soát vé) hiện mọi trạng thái.
+  const where = input.includeAll ? [] : [`e.status IN ('ON_SALE', 'SOLD_OUT')`];
 
   const addParam = (value) => {
     values.push(value);
@@ -123,7 +121,7 @@ export async function listEvents(input) {
       JOIN genres g ON g.genre_id = e.genre_id
       JOIN venues v ON v.venue_id = e.venue_id
       LEFT JOIN zones z ON z.event_id = e.event_id
-      WHERE ${where.join("\n      AND ")}
+      ${where.length ? `WHERE ${where.join("\n      AND ")}` : ""}
       GROUP BY
         e.event_id, e.title, g.name, e.genre_id,
         v.name, v.city, e.event_date, e.sale_open_at,
@@ -299,4 +297,12 @@ export async function deleteEvent({ params }) {
   );
 
   return rows[0] ?? null;
+}
+
+// [d] Danh sách địa điểm (cho form tạo/sửa sự kiện, thay cho việc gõ tay mã địa điểm)
+export async function listVenues() {
+  const { rows } = await pool.query(
+    `SELECT venue_id AS "venueId", name, city, address FROM venues ORDER BY city, name`,
+  );
+  return rows;
 }

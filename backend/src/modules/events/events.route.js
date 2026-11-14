@@ -7,6 +7,10 @@ const router = Router();
 
 // [d] #1 – danh sách thể loại
 router.get('/genres', controller.listGenres);
+// [d] danh sách địa điểm cho form sự kiện
+router.get('/venues', controller.listVenues);
+// [d,e] mọi sự kiện, mọi trạng thái (DRAFT, ENDED…) cho quản trị và nhân viên soát vé. Phải đặt TRƯỚC '/:eventId'
+router.get('/manage', authenticate, authorize('ADMIN', 'STAFF'), controller.listAllEvents);
 // [d,e] #1 lọc theo thể loại [d]; #2 lọc thành phố + khoảng ngày + khoảng giá [e]
 router.get('/', controller.listEvents);
 // [d] Chi tiết sự kiện + các khu vực
