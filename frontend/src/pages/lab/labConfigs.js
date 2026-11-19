@@ -35,13 +35,29 @@ export const labConfigs = {
   'query-processing': {
     owner: 'TV3',
     title: 'Xử lý truy vấn: báo cáo doanh thu theo khu vực',
-    subtitle: 'Một câu SQL JOIN + GROUP BY so với cách gom dữ liệu phía ứng dụng trên Firestore.',
-    engines: { postgres: 'Một câu SQL JOIN + GROUP BY', firestore: 'Nhiều truy vấn + gom phía client' },
-    params: [{ key: 'eventId', label: 'Mã sự kiện', type: 'number', default: 1 }],
+    subtitle: 'Cùng câu hỏi "doanh thu từng khu của một sự kiện": PostgreSQL trả lời bằng một câu SQL JOIN + GROUP BY, Firestore không có JOIN và GROUP BY nên phải chọn một trong bốn cách làm.',
+    engines: { postgres: 'Một câu SQL JOIN + GROUP BY · EXPLAIN ANALYZE', firestore: 'Không JOIN/GROUP BY · tính phí theo lượt đọc' },
+    note: 'Mỗi lần chạy tự sinh dữ liệu thử riêng (VIP, CAT 1, CAT 2, CAT 3; khoảng 8% vé đã hủy) ở cả hai DBMS, đối chiếu kết quả với đáp án tính sẵn rồi dọn sạch. PostgreSQL chạy trong một transaction rồi ROLLBACK. Firestore ghi vào queryLabRuns/{runId} (khoảng 2N lượt ghi, gói miễn phí giới hạn 20.000 lượt ghi/ngày). Số lượt đọc và số lượt gọi mới là số liệu so sánh chính; thời gian Firestore chỉ tham khảo.',
+    params: [
+      { key: 'tickets', label: 'Số vé của sự kiện', type: 'select', default: '1000', options: [['500', '500 vé'], ['1000', '1.000 vé'], ['2000', '2.000 vé']] },
+      {
+        key: 'approach', label: 'Cách làm trên Firestore', type: 'select', default: 'C', wide: true,
+        options: [
+          ['A', 'A. Chuẩn hóa, ứng dụng tự kết khu → ghế → vé'],
+          ['B', 'B. Phi chuẩn hóa, đọc hết vé rồi cộng ở ứng dụng'],
+          ['C', 'C. Phi chuẩn hóa, mỗi khu một truy vấn count() + sum()'],
+          ['D', 'D. Document tổng hợp duy trì sẵn'],
+        ],
+      },
+    ],
     metrics: [
       { label: 'Số truy vấn đã chạy', value: (m) => m.queries },
-      { label: 'Số document / dòng đọc', value: (m) => m.rowsRead },
+      { label: 'Số document / dòng đọc', value: (m) => (m.rowsRead == null ? null : Number(m.rowsRead).toLocaleString('vi-VN')) },
       { label: 'Số nhóm kết quả', value: (m) => m.groups },
+      { label: 'Tổng doanh thu', value: (m) => (m.revenue == null ? null : Number(m.revenue).toLocaleString('vi-VN') + ' đ') },
+      { label: 'Kết quả đúng đáp án', value: (m) => (m.matchesExpected == null ? null : m.matchesExpected ? 'Đúng' : 'SAI') },
+      { label: 'Thời gian truy vấn', value: (m) => (m.queryMs == null ? null : m.queryMs + ' ms') },
+      { label: 'Kế hoạch / cách làm', value: (m) => m.plan },
       { label: 'Thời gian hoàn tất', value: ms },
     ],
   },
