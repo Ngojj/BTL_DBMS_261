@@ -24,11 +24,11 @@ export async function checkTicket(qrCode, eventId, onPendingChange = () => {}) {
     const ref = doc(db, 'validTickets', qrCode);
     const snap = await getDoc(ref);
     // Firestore đã trả lời mà không có tài liệu → mã này không phải vé hợp lệ (không được rơi về dữ liệu mẫu)
-    if (!snap.exists()) return { status: 'invalid' };
+    if (!snap.exists()) return { status: 'invalid', reason: 'unknown' };
 
     const d = snap.data();
     const info = { seatLabel: d.seatLabel, holderName: d.holderName };
-    if (String(d.eventId) !== String(eventId)) return { status: 'invalid' };
+    if (String(d.eventId) !== String(eventId)) return { status: 'invalid', reason: 'other-event', otherEventId: String(d.eventId), info };
     if (d.checkedIn) return { status: 'used', info };
 
     // Không await: khi offline promise chỉ resolve lúc có mạng lại, nhưng ghi đã nằm trong hàng đợi cục bộ

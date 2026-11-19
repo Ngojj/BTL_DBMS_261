@@ -22,7 +22,7 @@ export default function QrScanner({ onScan }) {
 
   return (
     <div className="relative rounded-3xl bg-black overflow-hidden h-[340px]">
-      <div id={ELEMENT_ID} className="absolute inset-0 w-full h-full overflow-hidden [&_video]:!w-full [&_video]:!h-full [&_video]:object-cover [&_#qr-shaded-region]:!hidden" />
+      <div id={ELEMENT_ID} className="absolute inset-0 w-full h-full overflow-hidden [&_video]:!w-full [&_video]:!h-full [&_video]:object-cover [&_video]:pointer-events-none [&_video::-webkit-media-controls]:!hidden [&_video::-webkit-media-controls-start-playback-button]:!hidden [&_#qr-shaded-region]:!hidden" />
       <div className={'absolute left-1/2 top-1/2 w-[220px] h-[220px] -ml-[110px] -mt-[130px] pointer-events-none ' + (error ? 'opacity-30' : '')}>
         <span className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-white rounded-tl-2xl" />
         <span className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-white rounded-tr-2xl" />

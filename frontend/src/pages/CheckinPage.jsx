@@ -69,6 +69,14 @@ export default function CheckinPage() {
   );
 
   const eventTitle = events.data?.find((e) => String(e.eventId) === eventId)?.title;
+  // Giải thích vì sao vé bị từ chối để nhân viên biết xử lý (thường là chọn nhầm sự kiện ở trên cùng)
+  const otherTitle = result?.otherEventId && events.data?.find((e) => String(e.eventId) === result.otherEventId)?.title;
+  const reasonNote =
+    result?.reason === 'other-event'
+      ? 'Vé này của sự kiện khác' + (otherTitle ? ': “' + otherTitle + '”' : '') + '. Hãy chọn đúng sự kiện ở trên cùng.'
+      : result?.reason === 'unknown'
+        ? 'Mã không có trong danh sách vé hợp lệ (chưa thanh toán, đã hủy hoặc không phải vé TicketRush).'
+        : null;
   const res = result && RESULT[result.status];
 
   return (
@@ -108,7 +116,7 @@ export default function CheckinPage() {
             <div className="min-w-0">
               <p className="text-2xl font-extrabold leading-tight">{res.title}</p>
               {result.info && <p className="text-white/85 font-semibold truncate">{result.info.seatLabel} · {result.info.holderName}</p>}
-              {result.note && <p className="text-white/80 text-sm">{result.note}</p>}
+              {(reasonNote ?? result.note) && <p className="text-white/80 text-sm">{reasonNote ?? result.note}</p>}
             </div>
           </div>
         )}
