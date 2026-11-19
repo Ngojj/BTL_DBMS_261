@@ -12,7 +12,8 @@ export default function QrScanner({ onScan }) {
   useEffect(() => {
     const scanner = new Html5Qrcode(ELEMENT_ID);
     const started = scanner
-      .start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 220, height: 220 } }, (text) => handler.current(text), () => {})
+      // Không đặt qrbox: quét toàn bộ khung hình. Video bị cắt theo kiểu object-cover nên vùng qrbox của thư viện sẽ lệch với khung ngắm trên màn hình.
+      .start({ facingMode: 'environment' }, { fps: 10 }, (text) => handler.current(text), () => {})
       .catch(() => setError('Không mở được camera. Hãy cấp quyền camera hoặc dùng "Nhập mã vé thủ công".'));
     return () => {
       started.then(() => scanner.stop()).then(() => scanner.clear()).catch(() => {});
