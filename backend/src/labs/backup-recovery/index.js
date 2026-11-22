@@ -1,20 +1,21 @@
-// TODO [labs/backup-recovery] Phụ trách: TV1 – Backup & recovery
-// Kịch bản: Xóa nhầm một sự kiện rồi khôi phục (pg_dump/restore; Firestore export/import hoặc PITR)
+// TV1: pg_dump/restore vs application-level Firestore JSON snapshot.
 import { Router } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { runLab, listRuns } from '../labRunner.js';
 import * as postgres from './postgres.js';
 import * as firestore from './firestore.js';
+import { parseParams } from './shared.js';
 
 export const scenario = 'Backup & recovery';
 const router = Router();
 
 // POST body: { params: { ... } } – tham số riêng của thí nghiệm
 router.post('/run', asyncHandler(async (req, res) => {
+  const params = parseParams(req.body?.params);
   res.json(await runLab({
     topic: 'backup-recovery',
     scenario,
-    params: req.body?.params,
+    params,
     postgres: postgres.run,
     firestore: firestore.run,
   }));
