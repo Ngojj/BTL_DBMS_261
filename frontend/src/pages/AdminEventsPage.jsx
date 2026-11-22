@@ -11,8 +11,9 @@ const STATUSES = ['DRAFT', 'ON_SALE', 'SOLD_OUT', 'CANCELLED', 'ENDED'];
 const empty = { title: '', genreId: '', venueId: '', eventDate: '', saleOpenAt: '', maxTicketsPerUser: 4, status: 'DRAFT' };
 
 export default function AdminEventsPage() {
-  const events = useAsync(() => eventsApi.list(), []);
+  const events = useAsync(() => eventsApi.listAll(), []);
   const genres = useAsync(() => eventsApi.genres(), []);
+  const venues = useAsync(() => eventsApi.venues(), []);
   const [form, setForm] = useState(empty);
   const [editingId, setEditingId] = useState(null); // null = đang thêm mới
   const [open, setOpen] = useState(false);
@@ -126,7 +127,12 @@ export default function AdminEventsPage() {
                 {genres.data?.map((g) => <option key={g.genreId} value={g.genreId}>{g.name}</option>)}
               </select>
             </Field>
-            <Field label="Mã địa điểm (venue_id)"><input required type="number" min="1" className="input" value={form.venueId} onChange={set('venueId')} /></Field>
+            <Field label="Địa điểm">
+              <select required className="input" value={form.venueId} onChange={set('venueId')}>
+                <option value="">Chọn…</option>
+                {venues.data?.map((v) => <option key={v.venueId} value={v.venueId}>{v.name} · {v.city}</option>)}
+              </select>
+            </Field>
             <Field label="Ngày diễn ra"><input required type="datetime-local" className="input" value={form.eventDate} onChange={set('eventDate')} /></Field>
             <Field label="Giờ mở bán"><input required type="datetime-local" className="input" value={form.saleOpenAt} onChange={set('saleOpenAt')} /></Field>
             <Field label="Số vé tối đa / người"><input type="number" min="1" max="10" className="input" value={form.maxTicketsPerUser} onChange={set('maxTicketsPerUser')} /></Field>
@@ -144,7 +150,7 @@ export default function AdminEventsPage() {
         <ErrorBox error={events.error} />
         {events.data && (
           <div className="card overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[980px]">
               <thead><tr><th className="th">Sự kiện</th><th className="th">Thời gian</th><th className="th">Địa điểm</th><th className="th">Giá từ</th><th className="th">Trạng thái</th><th className="th" /></tr></thead>
               <tbody>
                 {events.data.map((ev) => (

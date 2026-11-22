@@ -129,3 +129,15 @@
   text-transform: uppercase;
   mix-blend-mode: multiply;
 }
+
+/* ---------- Điện thoại ---------- */
+/* Bảng dữ liệu: giữ bề rộng tối thiểu để chữ không bị bóp xuống dòng từng từ; thẻ bọc đã có overflow-x-auto nên cuộn ngang */
+.card.overflow-x-auto { -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 639px) {
+  /* iOS tự phóng to trang khi bấm vào ô nhập có chữ nhỏ hơn 16px */
+  .input { font-size: 16px; padding-block: 0.6rem; }
+  /* Vùng chạm tối thiểu ~44px */
+  .btn { min-height: 44px; }
+  .th, .td { padding-inline: 0.75rem; }
+}

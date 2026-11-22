@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "ticketrush-dev"
+    "default": "ticketrush-dev",
+    "prod": "ticketrush-5a616"
   }
 }

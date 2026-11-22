@@ -18,7 +18,7 @@ function normalizeZone(z) {
 }
 
 export default function AdminZonesPage() {
-  const events = useAsync(() => eventsApi.list(), []);
+  const events = useAsync(() => eventsApi.listAll(), []);
   const [eventId, setEventId] = useState("");
   const id =
     eventId || (events.data?.[0] ? String(events.data[0].eventId) : "");
@@ -29,7 +29,7 @@ export default function AdminZonesPage() {
   const zoneRows = (zones.data ?? []).map(normalizeZone);
   const [form, setForm] = useState({ name: "", price: "", capacity: "" });
   const [edit, setEdit] = useState(null); // { zoneId, name, price, capacity } khi đang sửa một dòng
-  const [rowsForm, setRowsForm] = useState({ rows: "A-C", perRow: 16 });
+  const [rowsForm, setRowsForm] = useState({ perRow: 16 });
   const [error, setError] = useState(null);
   const [note, setNote] = useState(null);
 
@@ -147,13 +147,13 @@ export default function AdminZonesPage() {
         <ErrorBox error={zones.error} />
         {zones.data && (
           <div className="card overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[820px]">
               <thead>
                 <tr>
                   <th className="th">Khu vực</th>
                   <th className="th">Giá</th>
                   <th className="th">Sức chứa</th>
-                  <th className="th">Sinh ghế (hàng, ghế/hàng)</th>
+                  <th className="th">Sinh ghế (số ghế mỗi hàng)</th>
                   <th className="th" />
                 </tr>
               </thead>
@@ -211,14 +211,6 @@ export default function AdminZonesPage() {
                       <td className="td">
                         <div className="flex gap-2 items-center">
                           <input
-                            aria-label="Các hàng"
-                            className="input w-24"
-                            value={rowsForm.rows}
-                            onChange={(e) =>
-                              setRowsForm({ ...rowsForm, rows: e.target.value })
-                            }
-                          />
-                          <input
                             aria-label="Ghế mỗi hàng"
                             type="number"
                             className="input w-20"
@@ -232,6 +224,7 @@ export default function AdminZonesPage() {
                           />
                           <button
                             className="btn-ghost"
+                            title="Số hàng tự tính theo sức chứa; hàng đặt tên A, B, C…"
                             onClick={() =>
                               run(
                                 () =>

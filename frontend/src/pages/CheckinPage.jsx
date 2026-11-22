@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import QrScanner from '../components/QrScanner.jsx';
 import { eventsApi } from '../api/eventsApi.js';
-import { checkTicket, preloadValidTickets } from '../lib/checkin.js';
+import { checkTicket, syncCheckinsToServer, watchValidTickets } from '../lib/checkin.js';
 import { useAsync, useOnline } from '../lib/useAsync.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const RESULT = {
   valid: { box: 'bg-emerald-700', title: 'Vé hợp lệ', icon: '✓' },
@@ -18,24 +19,40 @@ export default function CheckinPage() {
   const [params, setParams] = useSearchParams();
   const gate = params.get('gate') ?? '1';
   const online = useOnline();
-  const events = useAsync(() => eventsApi.list(), []);
+  const { firebaseReady } = useAuth();
+  const events = useAsync(() => eventsApi.listAll(), []);
   const [eventId, setEventId] = useState(params.get('eventId') ?? '');
   const [result, setResult] = useState(null);
   const [checked, setChecked] = useState(0);
   const [pending, setPending] = useState(0);
   const [preloaded, setPreloaded] = useState(null);
   const [manual, setManual] = useState(null); // null = ẩn ô nhập
+  const [serverSync, setServerSync] = useState(null); // kết quả lần đồng bộ PostgreSQL gần nhất: { at, updated, error }
   const last = useRef({ code: '', at: 0 });
 
   useEffect(() => {
     if (!eventId && events.data?.length) setEventId(String(events.data[0].eventId));
   }, [events.data, eventId]);
 
-  // Tải trước danh sách vé của sự kiện vào cache để soát được cả khi rớt mạng
+  // Theo dõi danh sách vé của sự kiện để cache offline luôn mới (xem lib/checkin.js → watchValidTickets).
+  // Phải chờ đăng nhập Firebase xong (firebaseReady): Security Rules chỉ cho STAFF đọc validTickets.
   useEffect(() => {
-    if (!eventId || !online) return;
-    preloadValidTickets(eventId).then(setPreloaded).catch(() => setPreloaded(null));
-  }, [eventId, online]);
+    if (!eventId || !firebaseReady) return undefined;
+    setPreloaded(null);
+    return watchValidTickets(eventId, setPreloaded, () => setPreloaded(null));
+  }, [eventId, firebaseReady]);
+
+  // Khi có mạng và không còn lượt soát nào đang chờ ghi lên Firestore → báo backend cập nhật PostgreSQL.
+  // Chạy lại mỗi khi có thêm lượt soát hoặc vừa có mạng trở lại; backend idempotent nên gọi dư không hại.
+  useEffect(() => {
+    if (!eventId || !online || pending > 0 || checked === 0) return undefined;
+    const timer = setTimeout(() => {
+      syncCheckinsToServer(eventId)
+        .then((r) => setServerSync({ at: new Date(), updated: r.updated, alreadySynced: r.alreadySynced }))
+        .catch((e) => setServerSync({ at: new Date(), error: e.message }));
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [eventId, online, pending, checked]);
 
   const handleCode = useCallback(
     async (raw) => {
@@ -52,6 +69,14 @@ export default function CheckinPage() {
   );
 
   const eventTitle = events.data?.find((e) => String(e.eventId) === eventId)?.title;
+  // Giải thích vì sao vé bị từ chối để nhân viên biết xử lý (thường là chọn nhầm sự kiện ở trên cùng)
+  const otherTitle = result?.otherEventId && events.data?.find((e) => String(e.eventId) === result.otherEventId)?.title;
+  const reasonNote =
+    result?.reason === 'other-event'
+      ? 'Vé này của sự kiện khác' + (otherTitle ? ': “' + otherTitle + '”' : '') + '. Hãy chọn đúng sự kiện ở trên cùng.'
+      : result?.reason === 'unknown'
+        ? 'Mã không có trong danh sách vé hợp lệ (chưa thanh toán, đã hủy hoặc không phải vé TicketRush).'
+        : null;
   const res = result && RESULT[result.status];
 
   return (
@@ -91,6 +116,7 @@ export default function CheckinPage() {
             <div className="min-w-0">
               <p className="text-2xl font-extrabold leading-tight">{res.title}</p>
               {result.info && <p className="text-white/85 font-semibold truncate">{result.info.seatLabel} · {result.info.holderName}</p>}
+              {(reasonNote ?? result.note) && <p className="text-white/80 text-sm">{reasonNote ?? result.note}</p>}
             </div>
           </div>
         )}
@@ -100,6 +126,13 @@ export default function CheckinPage() {
             <span>Đã soát tại cổng này: {checked} lượt</span>
             <span>Chờ đồng bộ: {pending} lượt</span>
           </div>
+          {serverSync && (
+            <p className={'text-xs mb-3 ' + (serverSync.error ? 'text-amber-300' : 'text-white/40')}>
+              {serverSync.error
+                ? 'Chưa đồng bộ được về máy chủ: ' + serverSync.error
+                : 'Đã đồng bộ về PostgreSQL lúc ' + serverSync.at.toLocaleTimeString('vi-VN', { hour12: false }) + ' (' + serverSync.updated + ' vé mới)'}
+            </p>
+          )}
           {manual === null ? (
             <button onClick={() => setManual('')} className="w-full rounded-2xl bg-white/10 hover:bg-white/15 py-4 font-bold">
               Nhập mã vé thủ công
