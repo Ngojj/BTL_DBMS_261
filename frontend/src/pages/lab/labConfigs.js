@@ -87,13 +87,15 @@ export const labConfigs = {
   'backup-recovery': {
     owner: 'TV1',
     title: 'Sao lưu và phục hồi: xóa nhầm một sự kiện',
-    subtitle: 'Xóa nhầm sự kiện rồi khôi phục: pg_dump/restore và Firestore export/import (hoặc PITR).',
-    engines: { postgres: 'pg_dump / pg_restore', firestore: 'Export / import · PITR' },
-    params: [{ key: 'eventId', label: 'Mã sự kiện bị xóa', type: 'number', default: 1 }],
+    subtitle: 'Tạo sự kiện thử, sao lưu ra tệp, xóa dữ liệu rồi khôi phục và đối chiếu trạng thái.',
+    engines: { postgres: 'pg_dump / pg_restore · dữ liệu thử', firestore: 'JSON / Admin SDK · cấp ứng dụng' },
+    note: 'Mỗi lần chạy tạo 1 sự kiện, 1 khu vực và số ghế đã chọn trong vùng dữ liệu riêng. Không xóa sự kiện thật. PostgreSQL giữ cấu trúc bảng và phục hồi dữ liệu từ tệp dump; Firestore dùng JSON, không phải Managed Export hay PITR. Thời gian sao lưu/phục hồi không gồm tạo dữ liệu, giả lập xóa, kiểm chứng và dọn dẹp. Dữ liệu và tệp thử được dọn sau khi chạy.',
+    params: [{ key: 'seatCount', label: 'Số ghế thử (1–200)', type: 'number', default: 50 }],
     metrics: [
       { label: 'Thời gian sao lưu', value: (m) => (m.backupMs != null ? m.backupMs + ' ms' : null) },
       { label: 'Thời gian phục hồi', value: (m) => (m.restoreMs != null ? m.restoreMs + ' ms' : null) },
       { label: 'Bản ghi phục hồi được', value: (m) => m.recordsRestored },
+      { label: 'Dung lượng bản sao', value: (m) => m.backupBytes != null ? m.backupBytes + ' B' : null },
       { label: 'Mất dữ liệu', value: (m) => (m.dataLoss == null ? null : m.dataLoss ? 'Có' : 'Không') },
     ],
   },
