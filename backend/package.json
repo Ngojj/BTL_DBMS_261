@@ -20,6 +20,10 @@
     "firebase-admin": "^12.3.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
-    "pg": "^8.12.0"
+    "pg": "^8.12.0",
+    "ticketrush": "file:.."
+  },
+  "devDependencies": {
+    "@google-cloud/firestore": "^9.4.1"
   }
 }
