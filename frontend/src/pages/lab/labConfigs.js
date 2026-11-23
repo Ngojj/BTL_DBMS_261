@@ -136,13 +136,14 @@ export const labConfigs = {
     ],
   },
   transaction: {
+    note: "Mỗi lần chạy dùng dữ liệu thử riêng và kiểm tra trước khi dọn. Firestore hủy các lệnh ghi chưa commit khi có lỗi. Thời gian gồm tạo dữ liệu, giao dịch, kiểm tra và dọn; không phải phép đo tốc độ giao dịch thuần. Bản ghi còn sót chỉ tính dữ liệu mua vé ngoài ý muốn sau lỗi.",
     owner: "TV1",
     title: "Giao dịch: mua vé và giả lập lỗi thanh toán",
     subtitle:
       "Kiểm tra rollback: khi thanh toán lỗi, ghế và đơn hàng có về đúng trạng thái ban đầu ở cả hai DBMS không.",
     engines: {
       postgres: "ACID · BEGIN/COMMIT/ROLLBACK",
-      firestore: "Transaction / batched write",
+      firestore: "Transaction · commit hoặc hủy ghi",
     },
     params: [
       {
@@ -214,17 +215,18 @@ export const labConfigs = {
     owner: "TV1",
     title: "Sao lưu và phục hồi: xóa nhầm một sự kiện",
     subtitle:
-      "Xóa nhầm sự kiện rồi khôi phục: pg_dump/restore và Firestore export/import (hoặc PITR).",
+      "Tạo sự kiện thử, sao lưu ra tệp, xóa dữ liệu rồi khôi phục và đối chiếu trạng thái.",
+    note: "Mỗi lần chạy tạo 1 sự kiện, 1 khu vực và số ghế đã chọn trong vùng dữ liệu riêng. Không xóa sự kiện thật. PostgreSQL giữ cấu trúc bảng và phục hồi dữ liệu từ tệp dump; Firestore dùng JSON, không phải Managed Export hay PITR. Thời gian sao lưu/phục hồi không gồm tạo dữ liệu, giả lập xóa, kiểm chứng và dọn dẹp. Dữ liệu và tệp thử được dọn sau khi chạy.",
     engines: {
       postgres: "pg_dump / pg_restore",
-      firestore: "Export / import · PITR",
+      firestore: "JSON / Admin SDK · cấp ứng dụng",
     },
     params: [
       {
-        key: "eventId",
-        label: "Mã sự kiện bị xóa",
+        key: "seatCount",
+        label: "Số ghế thử (1–200)",
         type: "number",
-        default: 1,
+        default: 50,
       },
     ],
     metrics: [
@@ -237,6 +239,7 @@ export const labConfigs = {
         value: (m) => (m.restoreMs != null ? m.restoreMs + " ms" : null),
       },
       { label: "Bản ghi phục hồi được", value: (m) => m.recordsRestored },
+      { label: "Dung lượng bản sao", value: (m) => m.backupBytes != null ? m.backupBytes + " B" : null },
       {
         label: "Mất dữ liệu",
         value: (m) => (m.dataLoss == null ? null : m.dataLoss ? "Có" : "Không"),
