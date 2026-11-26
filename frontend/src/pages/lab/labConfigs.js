@@ -32,57 +32,21 @@ export const labConfigs = {
     ],
   },
   indexing: {
-    indexing: {
-      owner: "TV2",
-      title: "Chỉ mục: tìm vé theo sự kiện và trạng thái check-in",
-      subtitle:
-        "Tìm vé theo sự kiện và trạng thái check-in. PostgreSQL dùng EXPLAIN ANALYZE; Firestore dùng Query Explain nếu SDK hỗ trợ.",
-      engines: {
-        postgres: "B-tree · EXPLAIN ANALYZE",
-        firestore: "Chỉ mục tự động · Query Explain nếu SDK hỗ trợ",
-      },
-      params: [
-        {
-          key: "eventId",
-          label: "Mã sự kiện",
-          type: "number",
-          default: 2,
-        },
-        {
-          key: "status",
-          label: "Trạng thái vé",
-          type: "select",
-          default: "VALID",
-          options: [
-            ["VALID", "Chưa check-in"],
-            ["CHECKED_IN", "Đã check-in"],
-          ],
-        },
-        {
-          key: "planMode",
-          label: "Chế độ PostgreSQL",
-          type: "select",
-          default: "seqscan",
-          wide: true,
-          options: [
-            ["seqscan", "1. Seq Scan đối chứng"],
-            ["index", "2. Ưu tiên sử dụng Index"],
-          ],
-        },
-      ],
-      metrics: [
-        { label: "Kế hoạch truy vấn", value: (m) => m.plan },
-        { label: "Số dòng / document quét", value: (m) => m.rowsScanned },
-        { label: "Số kết quả", value: (m) => m.rowsReturned },
-        {
-          label: "Thời gian SQL (EXPLAIN ANALYZE)",
-          value: (m) => (m.executionMs != null ? m.executionMs + " ms" : null),
-        },
-        { label: "Thời gian adapter", value: ms },
-      ],
+    owner: "TV2",
+    title: "Chỉ mục: tìm vé theo sự kiện và trạng thái check-in",
+    subtitle:
+      "Tìm vé theo sự kiện và trạng thái check-in. PostgreSQL dùng EXPLAIN ANALYZE; Firestore dùng Query Explain nếu SDK hỗ trợ.",
+    engines: {
+      postgres: "B-tree · EXPLAIN ANALYZE",
+      firestore: "Chỉ mục tự động · Query Explain nếu SDK hỗ trợ",
     },
     params: [
-      { key: "eventId", label: "Mã sự kiện", type: "number", default: 2 },
+      {
+        key: "eventId",
+        label: "Mã sự kiện",
+        type: "number",
+        default: 2,
+      },
       {
         key: "status",
         label: "Trạng thái vé",
@@ -116,23 +80,33 @@ export const labConfigs = {
       { label: "Thời gian adapter", value: ms },
     ],
   },
-  "query-processing": {
-    owner: "TV3",
-    title: "Xử lý truy vấn: báo cáo doanh thu theo khu vực",
-    subtitle:
-      "Một câu SQL JOIN + GROUP BY so với cách gom dữ liệu phía ứng dụng trên Firestore.",
-    engines: {
-      postgres: "Một câu SQL JOIN + GROUP BY",
-      firestore: "Nhiều truy vấn + gom phía client",
-    },
+  'query-processing': {
+    owner: 'TV3',
+    title: 'Xử lý truy vấn: báo cáo doanh thu theo khu vực',
+    subtitle: 'Cùng câu hỏi "doanh thu từng khu của một sự kiện": PostgreSQL trả lời bằng một câu SQL JOIN + GROUP BY, Firestore không có JOIN và GROUP BY nên phải chọn một trong bốn cách làm.',
+    engines: { postgres: 'Một câu SQL JOIN + GROUP BY · EXPLAIN ANALYZE', firestore: 'Không JOIN/GROUP BY · tính phí theo lượt đọc' },
+    note: 'Mỗi lần chạy tự sinh dữ liệu thử riêng (VIP, CAT 1, CAT 2, CAT 3; khoảng 8% vé đã hủy) ở cả hai DBMS, đối chiếu kết quả với đáp án tính sẵn rồi dọn sạch. PostgreSQL chạy trong một transaction rồi ROLLBACK. Firestore ghi vào queryLabRuns/{runId} (khoảng 2N lượt ghi, gói miễn phí giới hạn 20.000 lượt ghi/ngày). Số lượt đọc và số lượt gọi mới là số liệu so sánh chính; thời gian Firestore chỉ tham khảo.',
     params: [
-      { key: "eventId", label: "Mã sự kiện", type: "number", default: 1 },
+      { key: 'tickets', label: 'Số vé của sự kiện', type: 'select', default: '1000', options: [['500', '500 vé'], ['1000', '1.000 vé'], ['2000', '2.000 vé']] },
+      {
+        key: 'approach', label: 'Cách làm trên Firestore', type: 'select', default: 'C', wide: true,
+        options: [
+          ['A', 'A. Chuẩn hóa, ứng dụng tự kết khu → ghế → vé'],
+          ['B', 'B. Phi chuẩn hóa, đọc hết vé rồi cộng ở ứng dụng'],
+          ['C', 'C. Phi chuẩn hóa, mỗi khu một truy vấn count() + sum()'],
+          ['D', 'D. Document tổng hợp duy trì sẵn'],
+        ],
+      },
     ],
     metrics: [
-      { label: "Số truy vấn đã chạy", value: (m) => m.queries },
-      { label: "Số document / dòng đọc", value: (m) => m.rowsRead },
-      { label: "Số nhóm kết quả", value: (m) => m.groups },
-      { label: "Thời gian hoàn tất", value: ms },
+      { label: 'Số truy vấn đã chạy', value: (m) => m.queries },
+      { label: 'Số document / dòng đọc', value: (m) => (m.rowsRead == null ? null : Number(m.rowsRead).toLocaleString('vi-VN')) },
+      { label: 'Số nhóm kết quả', value: (m) => m.groups },
+      { label: 'Tổng doanh thu', value: (m) => (m.revenue == null ? null : Number(m.revenue).toLocaleString('vi-VN') + ' đ') },
+      { label: 'Kết quả đúng đáp án', value: (m) => (m.matchesExpected == null ? null : m.matchesExpected ? 'Đúng' : 'SAI') },
+      { label: 'Thời gian truy vấn', value: (m) => (m.queryMs == null ? null : m.queryMs + ' ms') },
+      { label: 'Kế hoạch / cách làm', value: (m) => m.plan },
+      { label: 'Thời gian hoàn tất', value: ms },
     ],
   },
   transaction: {
@@ -171,43 +145,36 @@ export const labConfigs = {
       { label: "Thời gian hoàn tất", value: ms },
     ],
   },
-  "concurrency-control": {
-    owner: "TV5",
-    eyebrow: "DBMS LAB · CONCURRENCY CONTROL",
-    title: "Giả lập giờ G: nhiều người giành cùng một số vé",
-    subtitle:
-      "Cùng kịch bản, cùng dữ liệu, chạy lần lượt trên hai DBMS. Kiểm tra có bán trùng ghế không và cái giá phải trả.",
-    engines: {
-      postgres: "MVCC + khóa dòng",
-      firestore: "Transaction serializable",
-    },
+  'concurrency-control': {
+    owner: 'TV3',
+    eyebrow: 'DBMS LAB · CONCURRENCY CONTROL',
+    title: 'Giả lập giờ G: nhiều người giành cùng một số vé',
+    subtitle: 'N người cùng mua "ghế tốt nhất còn trống" trong M ghế, chạy trên cả hai DBMS với cùng một chiến lược điều khiển đồng thời. Kiểm tra có bán trùng ghế không, bao nhiêu người bị từ chối khi vẫn còn ghế, và mất bao lâu.',
+    engines: { postgres: 'MVCC + khóa dòng', firestore: 'Transaction serializable · khóa bi quan (Admin SDK)' },
+    note: 'Kết quả đúng: số vé bán ra = số ghế, không bán trùng, không còn ghế trống. Mỗi lần chạy tạo dữ liệu thử riêng (PostgreSQL: bảng lab_cc_*, Firestore: concurrencyLabRuns/{runId}) rồi xóa ngay. Giữa lúc đọc và lúc ghi có 5 ms "suy nghĩ" mô phỏng logic ứng dụng; tối đa 50 người chạy cùng lúc. Firestore đi qua Internet nên thời gian chỉ để tham khảo; chi phí một lần chạy 500 người khoảng vài nghìn lượt đọc/ghi.',
     params: [
-      { key: "users", label: "Số người mua", type: "number", default: 500 },
-      { key: "seats", label: "Số vé mở bán", type: "number", default: 50 },
+      { key: 'users', label: 'Số người mua (2–1000)', type: 'number', default: 200 },
+      { key: 'seats', label: 'Số ghế mở bán (1–200)', type: 'number', default: 50 },
       {
-        key: "strategy",
-        label: "Chiến lược điều khiển đồng thời",
-        type: "select",
-        default: "pessimistic",
-        wide: true,
+        key: 'strategy', label: 'Chiến lược điều khiển đồng thời', type: 'select', default: 'pessimistic', wide: true,
         options: [
-          [
-            "pessimistic",
-            "Khóa bi quan (SELECT … FOR UPDATE / transaction server)",
-          ],
-          ["optimistic", "Khóa lạc quan (cột version, kiểm tra khi commit)"],
-          ["none", "Không khóa (để thấy lỗi bán trùng)"],
+          ['none', 'Không khóa: đọc ghế trống rồi ghi (để thấy bán trùng)'],
+          ['pessimistic', 'Khóa bi quan: SELECT … FOR UPDATE / runTransaction'],
+          ['optimistic', 'Khóa lạc quan: cột version / ghi có điều kiện lastUpdateTime'],
+          ['skip', 'Bỏ qua ghế đang khóa: SKIP LOCKED / chọn ngẫu nhiên 1 trong 20 ghế'],
         ],
       },
     ],
     metrics: [
-      {
-        label: "Vé bán ra / mở bán",
-        value: (m, p) => (m.sold != null ? m.sold + " / " + p.seats : null),
-      },
-      { label: "Ghế bị bán trùng", value: (m) => m.duplicates },
-      { label: "Xung đột / thử lại", value: (m) => m.conflicts },
-      { label: "Thời gian hoàn tất", value: ms },
+      { label: 'Cách làm', value: (m) => m.method },
+      { label: 'Ghế đã bán / mở bán', value: (m, p) => (m.sold != null ? m.sold + ' / ' + p.seats : null) },
+      { label: 'Vé phát hành', value: (m) => m.ticketsIssued },
+      { label: 'Vé bán trùng ghế', value: (m) => m.duplicates },
+      { label: 'Ghế còn trống khi kết thúc', value: (m) => m.seatsLeft },
+      { label: 'Người bị từ chối do lỗi / tranh chấp', value: (m) => m.refused },
+      { label: 'Xung đột / chạy lại', value: (m) => m.conflicts },
+      { label: 'Thời gian chạy', value: (m) => (m.elapsedMs == null ? null : Number(m.elapsedMs).toLocaleString('vi-VN') + ' ms') },
+      { label: 'P95 thời gian một người', value: (m) => (m.p95Ms == null ? null : Number(m.p95Ms).toLocaleString('vi-VN') + ' ms') },
     ],
   },
   "backup-recovery": {
@@ -221,10 +188,10 @@ export const labConfigs = {
     },
     params: [
       {
-        key: "eventId",
-        label: "Mã sự kiện bị xóa",
+        key: "seatCount",
+        label: "Số ghế của sự kiện thử (1–200)",
         type: "number",
-        default: 1,
+        default: 50,
       },
     ],
     metrics: [

@@ -1,0 +1,15 @@
+{
+  "name": "ticketrush-demo-qp-firestore",
+  "private": true,
+  "type": "module",
+  "description": "Demo Query processing trên Firestore Emulator (mục 3.3)",
+  "scripts": {
+    "load": "node load.mjs",
+    "clean": "node load.mjs --clean",
+    "demo": "node demo.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.3.0",
+    "pg": "^8.12.0"
+  }
+}

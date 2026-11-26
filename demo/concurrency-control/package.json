@@ -1,0 +1,10 @@
+{
+  "name": "ticketrush-demo-concurrency",
+  "private": true,
+  "type": "module",
+  "description": "Demo trực tiếp mục 3.5 Concurrency control: PostgreSQL (psql + node) và Cloud Firestore thật",
+  "dependencies": {
+    "firebase-admin": "^12.3.0",
+    "pg": "^8.12.0"
+  }
+}
