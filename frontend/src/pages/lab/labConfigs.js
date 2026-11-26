@@ -8,27 +8,44 @@ const ms = (_m, _p, r) => (r.durationMs != null ? r.durationMs + " ms" : null);
 export const labConfigs = {
   "data-storage": {
     owner: "TV4",
+    eyebrow: "DBMS LAB · DATA STORAGE",
     title: "Lưu trữ: cùng dữ liệu vé, hai mô hình",
     subtitle:
-      'So sánh dung lượng, số lần đọc để dựng trang "vé của tôi" và chi phí ước tính của Firestore.',
+      'Cùng một sự kiện với N vé đã bán, lưu chuẩn hóa trên PostgreSQL và theo document trên Firestore. So sánh dung lượng, số lượt đọc để dựng trang "vé của tôi", chi phí ước tính và số chỗ phải sửa khi đổi tên sự kiện.',
     engines: {
-      postgres: "Bảng quan hệ, chuẩn hóa",
-      firestore: "Document, phi chuẩn hóa",
+      postgres: "Bảng quan hệ, chuẩn hóa · heap + chỉ mục",
+      firestore: "Document · tính phí theo lượt đọc",
     },
+    note: 'Mỗi lần chạy tạo dữ liệu thử riêng (PostgreSQL: bảng tạm ds_*, Firestore: dataStorageLabRuns/{runId}) rồi xóa ngay. Dung lượng Firestore tính theo công thức tên document + tên trường + giá trị + 32 byte, chưa gồm chỉ mục. Sau khi đo, mỗi ghế trên PostgreSQL được UPDATE hai lần (AVAILABLE → HELD → SOLD) để thấy dead tuple. Giá đọc Firestore: 0,06 USD / 100.000 lượt (bản Standard).',
     params: [
-      { key: "tickets", label: "Số vé", type: "number", default: 10000 },
+      { key: "tickets", label: "Số vé của sự kiện (10–5000)", type: "number", default: 1000 },
+      { key: "myTickets", label: 'Số vé của khách xem "vé của tôi" (1–50)', type: "number", default: 4 },
+      {
+        key: "model",
+        label: "Mô hình lưu trên Firestore",
+        type: "select",
+        default: "current",
+        wide: true,
+        options: [
+          ["current", "Như hiện tại: validTickets/{qr} + events/{id} (mỗi vé đọc 2 document)"],
+          ["denormalized", "Phi chuẩn hóa: users/{uid}/myTickets chép sẵn thông tin sự kiện"],
+        ],
+      },
     ],
     metrics: [
+      { label: "Cách lưu", value: (m) => m.model },
       {
         label: "Dung lượng dữ liệu",
-        value: (m) =>
-          m.storageBytes != null
-            ? (m.storageBytes / 1024).toFixed(1) + " KB"
-            : null,
+        value: (m) => (m.storageBytes != null ? (m.storageBytes / 1024).toFixed(1) + " KB" : null),
       },
-      { label: "Số lần đọc (vé của tôi)", value: (m) => m.readsForMyTickets },
-      { label: "Chi phí ước tính", value: (m) => m.estimatedCost },
-      { label: "Thời gian hoàn tất", value: ms },
+      { label: "Số dòng / document", value: (m) => (m.records == null ? null : Number(m.records).toLocaleString("vi-VN")) },
+      { label: 'Số truy vấn / lượt đọc cho "vé của tôi"', value: (m) => m.readsForMyTickets },
+      { label: "Số vé trả về", value: (m) => m.myTicketsReturned },
+      { label: "Chi phí đọc ước tính", value: (m) => m.estimatedCost },
+      { label: "Số dòng / document phải sửa khi đổi tên sự kiện", value: (m) => m.writesOnRename },
+      { label: "Dead tuple ở bảng ghế sau 2 lần UPDATE", value: (m) => m.deadTuples },
+      { label: "Bảng ghế trước → sau 2 lần UPDATE", value: (m) => m.seatsBloat },
+      { label: "Thời gian đọc", value: (m) => (m.queryMs == null ? null : m.queryMs + " ms") },
     ],
   },
   indexing: {
