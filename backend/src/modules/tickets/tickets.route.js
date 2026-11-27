@@ -1,10 +1,11 @@
+// TODO [tickets.route] Phụ trách: TV5 (#6)
 import { Router } from 'express';
+import * as controller from './tickets.controller.js';
 import { authenticate } from '../../middleware/auth.js';
-import { getMyTickets } from './tickets.controller.js';
 
 const router = Router();
 
-// GET /api/tickets  – vé của tôi (CUSTOMER đã đăng nhập)
-router.get('/', authenticate, getMyTickets);
+// [f] #6 – vé của tôi: JOIN tickets/orders/seats/zones/events
+router.get('/mine', authenticate, controller.listMyTickets);
 
 export default router;

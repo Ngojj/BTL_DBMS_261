@@ -1,15 +1,13 @@
+// TODO [checkin.route] Phụ trách: TV5 (#7)
 import { Router } from 'express';
+import * as controller from './checkin.controller.js';
 import { authenticate, authorize } from '../../middleware/auth.js';
-import { lookup, checkin } from './checkin.controller.js';
 
 const router = Router();
-const staff  = [authenticate, authorize('STAFF', 'ADMIN')];
 
-// GET  /api/checkin/:qrCode  – xem thông tin vé (STAFF/ADMIN)
-router.get ('/:qrCode', ...staff, lookup);
-// POST /api/checkin/:qrCode  – soát vé (STAFF/ADMIN)
-router.post('/:qrCode', ...staff, checkin);
-// POST /api/checkin          – body { qrCode } – dùng khi QR scan offline gửi lên
-router.post('/', ...staff, checkin);
+// [d] #7 – danh sách vé hợp lệ (nạp/đối chiếu với Firestore validTickets)
+router.get('/events/:eventId/valid-tickets', authenticate, authorize('STAFF', 'ADMIN'), controller.listValidTickets);
+// [c] #7 – nhận danh sách checkedIn từ cổng, cập nhật tickets.status = CHECKED_IN trong PostgreSQL
+router.post('/sync', authenticate, authorize('STAFF', 'ADMIN'), controller.syncCheckins);
 
 export default router;

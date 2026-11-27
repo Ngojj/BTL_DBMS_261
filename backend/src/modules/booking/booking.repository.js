@@ -42,7 +42,7 @@ async function expireOrders(client, orderIds) {
   await client.query("UPDATE orders SET status = 'EXPIRED' WHERE order_id = ANY($1) AND status = 'PENDING'", [orderIds]);
 }
 
-// [a] Insert order/tickets và giữ seat trong cùng transaction; khóa user trước khi đếm giới hạn.
+// [a] #4 – giữ ghế (SELECT … FOR UPDATE) → tạo đơn + vé PENDING. Khóa users FOR UPDATE trước khi đếm giới hạn vé
 export async function createOrder(input = {}) {
   const userId = readUserId(input);
   const eventId = Number(input.body?.eventId);
@@ -131,20 +131,21 @@ export async function createOrder(input = {}) {
   });
 }
 
-// [a,c] Insert payment and update order/seats atomically; no real payment provider is called.
+// [a,c] #4 – thanh toán giả lập: insert payments, update orders/seats/tickets
 export async function payOrder(input = {}) {
   const userId = readUserId(input);
   const orderId = readOrderId(input);
+  const method = input.body?.method ?? 'CARD';
   return withTransaction(async (client) => {
     const result = await client.query('SELECT * FROM orders WHERE order_id = $1 FOR UPDATE', [orderId]);
     const order = result.rows[0];
     if (!order) throw new AppError(404, 'NOT_FOUND', 'Không tìm thấy đơn hàng');
     if (Number(order.user_id) !== userId) throw new AppError(403, 'FORBIDDEN', 'Bạn không có quyền thanh toán đơn này');
-    if (order.status === 'PAID') return { orderId: String(orderId), status: 'PAID', paid: true };
+    if (order.status === 'PAID') return { orderId: String(orderId), eventId: String(order.event_id), status: 'PAID', paid: true };
     if (order.status !== 'PENDING') throw new AppError(409, 'ORDER_NOT_PAYABLE', 'Đơn hàng không thể thanh toán');
     if (new Date(order.expires_at) <= new Date()) {
       await expireOrders(client, [orderId]);
-      return { orderId: String(orderId), status: 'EXPIRED', paid: false };
+      return { orderId: String(orderId), eventId: String(order.event_id), status: 'EXPIRED', paid: false };
     }
 
     const tickets = await client.query(
@@ -158,8 +159,8 @@ export async function payOrder(input = {}) {
     }
     if (Number(order.total) > 0) {
       await client.query(
-        `INSERT INTO payments (order_id, amount, method, status, paid_at) VALUES ($1, $2, 'CARD', 'SUCCESS', now())`,
-        [orderId, order.total],
+        `INSERT INTO payments (order_id, amount, method, status, paid_at) VALUES ($1, $2, $3, 'SUCCESS', now())`,
+        [orderId, order.total, method],
       );
     }
     await client.query("UPDATE orders SET status = 'PAID' WHERE order_id = $1", [orderId]);
@@ -168,11 +169,11 @@ export async function payOrder(input = {}) {
         WHERE seat_id IN (SELECT seat_id FROM tickets WHERE order_id = $1)`,
       [orderId],
     );
-    return { orderId: String(orderId), status: 'PAID', paid: true, amount: Number(order.total) };
+    return { orderId: String(orderId), eventId: String(order.event_id), status: 'PAID', paid: true, amount: Number(order.total) };
   });
 }
 
-// [c] Cancel all tickets in the order, release seats, and record simulated refund state.
+// [c] #5 – hủy đơn, hoàn vé, trả ghế về AVAILABLE
 export async function cancelOrder(input = {}) {
   const userId = readUserId(input);
   const orderId = readOrderId(input);
@@ -181,8 +182,8 @@ export async function cancelOrder(input = {}) {
     const order = result.rows[0];
     if (!order) throw new AppError(404, 'NOT_FOUND', 'Không tìm thấy đơn hàng');
     if (Number(order.user_id) !== userId) throw new AppError(403, 'FORBIDDEN', 'Bạn không có quyền hủy đơn này');
-    if (order.status === 'CANCELLED') return { cancelled: true, orderId: String(orderId), status: 'CANCELLED' };
-    if (order.status === 'EXPIRED') return { cancelled: false, orderId: String(orderId), status: 'EXPIRED' };
+    if (order.status === 'CANCELLED') return { cancelled: true, orderId: String(orderId), eventId: String(order.event_id), status: 'CANCELLED' };
+    if (order.status === 'EXPIRED') return { cancelled: false, orderId: String(orderId), eventId: String(order.event_id), status: 'EXPIRED' };
 
     const ticketResult = await client.query('SELECT ticket_id, seat_id, status FROM tickets WHERE order_id = $1 FOR UPDATE', [orderId]);
     if (ticketResult.rows.some((ticket) => ticket.status === 'CHECKED_IN')) {
@@ -201,11 +202,11 @@ export async function cancelOrder(input = {}) {
       await client.query("UPDATE payments SET status = 'REFUNDED' WHERE order_id = $1 AND status = 'SUCCESS'", [orderId]);
     }
     await client.query("UPDATE orders SET status = 'CANCELLED' WHERE order_id = $1", [orderId]);
-    return { cancelled: true, orderId: String(orderId), status: 'CANCELLED', seatIds };
+    return { cancelled: true, orderId: String(orderId), eventId: String(order.event_id), status: 'CANCELLED', seatIds };
   });
 }
 
-// [d] One-condition lookup, grouped with order summary for checkout.
+// [d] Đơn hàng của tôi
 export async function listMyOrders(input = {}) {
   const userId = readUserId(input);
   const { rows } = await pool.query(
@@ -226,4 +227,46 @@ export async function listMyOrders(input = {}) {
     total: Number(row.total), status: row.status, createdAt: row.created_at, expiresAt: row.expires_at,
     ticketCount: Number(row.ticket_count), ticketTotal: Number(row.ticket_total),
   }));
+}
+
+// [f] join orders + tickets + seats + zones + events (chi tiết đơn cho trang thanh toán)
+export async function getOrder(input = {}) {
+  const userId = readUserId(input);
+  const orderId = readOrderId(input);
+  const { rows } = await pool.query(
+    `SELECT o.order_id, o.user_id, o.event_id, o.status, o.total, o.expires_at,
+            e.title AS event_title, e.event_date,
+            v.name AS venue_name, v.city,
+            s.seat_id, s.row_label, s.seat_no, z.name AS zone_name, t.price
+       FROM orders o
+       JOIN events e ON e.event_id = o.event_id
+       JOIN venues v ON v.venue_id = e.venue_id
+       LEFT JOIN tickets t ON t.order_id = o.order_id
+       LEFT JOIN seats s ON s.seat_id = t.seat_id
+       LEFT JOIN zones z ON z.zone_id = s.zone_id
+      WHERE o.order_id = $1 AND o.user_id = $2
+      ORDER BY s.row_label, s.seat_no`,
+    [orderId, userId],
+  );
+  if (!rows.length) throw new AppError(404, 'NOT_FOUND', 'Không tìm thấy đơn hàng');
+  const first = rows[0];
+  return {
+    orderId: String(first.order_id),
+    eventId: String(first.event_id),
+    eventTitle: first.event_title,
+    eventDate: first.event_date,
+    venueName: first.venue_name,
+    city: first.city,
+    status: first.status,
+    total: Number(first.total),
+    expiresAt: first.expires_at,
+    items: rows
+      .filter((r) => r.seat_id != null)
+      .map((r) => ({
+        seatId: String(r.seat_id),
+        seatLabel: `${r.row_label}${r.seat_no}`,
+        zone: r.zone_name,
+        price: Number(r.price),
+      })),
+  };
 }

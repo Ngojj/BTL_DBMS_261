@@ -1,6 +1,8 @@
+import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/env.js';
+import { firebaseAuth } from '../../config/firebase.js';
 import { AppError } from '../../utils/AppError.js';
 import * as repo from './auth.repository.js';
 
@@ -21,54 +23,9 @@ export async function register({ email, phone, fullName, password } = {}) {
 }
 
 export async function login({ email, password } = {}) {
-  const normalizedEmail = (email || '').trim().toLowerCase();
-  let user = normalizedEmail && (await repo.findByEmail(normalizedEmail));
-
-  // Tự động khởi tạo tài khoản mẫu nếu chưa có trong DB (tránh lỗi khi chưa chạy seed)
-  if (!user && normalizedEmail) {
-    const defaultHash = await bcrypt.hash('123456', 10);
-    if (normalizedEmail === 'admin@ticketrush.vn' || normalizedEmail === 'admin@gmail.com' || normalizedEmail === 'admin') {
-      user = await repo.insertUser({
-        email: normalizedEmail.includes('@') ? normalizedEmail : `${normalizedEmail}@ticketrush.vn`,
-        phone: '0901234567',
-        fullName: 'Quản trị viên',
-        passwordHash: defaultHash,
-        role: 'ADMIN',
-      });
-    } else if (normalizedEmail === 'staff@ticketrush.vn' || normalizedEmail === 'staff@gmail.com' || normalizedEmail === 'staff') {
-      user = await repo.insertUser({
-        email: normalizedEmail.includes('@') ? normalizedEmail : `${normalizedEmail}@ticketrush.vn`,
-        phone: '0901234568',
-        fullName: 'Nhân viên soát vé',
-        passwordHash: defaultHash,
-        role: 'STAFF',
-      });
-    } else if (normalizedEmail === 'alice@example.com' || normalizedEmail === 'user@gmail.com' || normalizedEmail === 'khach@gmail.com') {
-      user = await repo.insertUser({
-        email: normalizedEmail,
-        phone: '0912345001',
-        fullName: 'Nguyễn Thị Alice',
-        passwordHash: defaultHash,
-        role: 'CUSTOMER',
-      });
-    }
-  }
-
-  if (!user) {
-    throw new AppError(401, 'BAD_CREDENTIALS', 'Email không tồn tại trong hệ thống');
-  }
-
-  // Chấp nhận mật khẩu đơn giản '123456', 'admin', 'Password123!' hoặc hash thật trong database
-  const isMatch =
-    password === '123456' ||
-    password === 'admin' ||
-    password === 'Password123!' ||
-    (await bcrypt.compare(password ?? '', user.password_hash).catch(() => false));
-
-  if (!isMatch) {
-    throw new AppError(401, 'BAD_CREDENTIALS', 'Sai mật khẩu. Gợi ý: mật khẩu mặc định là 123456');
-  }
-
+  const user = email && (await repo.findByEmail(email));
+  if (!user || !(await bcrypt.compare(password ?? '', user.password_hash)))
+    throw new AppError(401, 'BAD_CREDENTIALS', 'Sai email hoặc mật khẩu');
   return { token: sign(user), user: publicUser(user) };
 }
 
@@ -76,4 +33,40 @@ export async function me(userId) {
   const user = await repo.findById(userId);
   if (!user) throw new AppError(404, 'NOT_FOUND', 'Không tìm thấy người dùng');
   return publicUser(user);
+}
+
+export async function firebaseToken({ userId, role }) {
+  return { token: await firebaseAuth().createCustomToken(String(userId), { role }) };
+}
+
+// Đăng nhập / đăng ký bằng Google.
+// Frontend đăng nhập Google qua Firebase Auth rồi gửi Firebase ID token; ta xác minh chữ ký + nhà cung cấp + email đã xác minh.
+// - Email đã có trong PostgreSQL: đăng nhập vào tài khoản đó (giữ nguyên role).
+// - Email mới: tạo CUSTOMER. Bảng users bắt buộc có phone (cũng dùng để phát hiện gom vé) nên yêu cầu thêm phone,
+//   thiếu thì trả 409 PHONE_REQUIRED để frontend hỏi rồi gọi lại. Mật khẩu là chuỗi ngẫu nhiên không ai biết
+//   (tài khoản chỉ vào được bằng Google, hoặc đặt lại mật khẩu sau này).
+export async function googleLogin({ idToken, phone } = {}) {
+  if (!idToken) throw new AppError(400, 'VALIDATION', 'Thiếu idToken');
+  let decoded;
+  try {
+    decoded = await firebaseAuth().verifyIdToken(idToken);
+  } catch {
+    throw new AppError(401, 'INVALID_GOOGLE_TOKEN', 'Phiên đăng nhập Google không hợp lệ hoặc đã hết hạn');
+  }
+  if (decoded.firebase?.sign_in_provider !== 'google.com' || !decoded.email || !decoded.email_verified)
+    throw new AppError(401, 'INVALID_GOOGLE_TOKEN', 'Tài khoản Google chưa xác minh email');
+
+  const email = decoded.email.toLowerCase();
+  let user = await repo.findByEmail(email);
+  if (!user) {
+    if (!phone) throw new AppError(409, 'PHONE_REQUIRED', 'Cần số điện thoại để hoàn tất đăng ký');
+    if (!/^[0-9]{9,15}$/.test(phone)) throw new AppError(400, 'VALIDATION', 'Số điện thoại phải gồm 9–15 chữ số');
+    user = await repo.insertUser({
+      email,
+      phone,
+      fullName: decoded.name ?? email.split('@')[0],
+      passwordHash: await bcrypt.hash(randomBytes(32).toString('hex'), 10),
+    });
+  }
+  return { token: sign(user), user: publicUser(user) };
 }

@@ -1,20 +1,14 @@
-import * as svc from './checkin.service.js';
+// TODO [checkin.controller] Phụ trách: TV5 (#7)
+import { asyncHandler } from '../../utils/asyncHandler.js';
+import * as service from './checkin.service.js';
 
-export async function lookup(req, res, next) {
-  try {
-    const ticket = await svc.lookupTicket(req.params.qrCode);
-    res.json({ ticket });
-  } catch (err) {
-    next(err);
-  }
-}
+// Chỉ đọc request → gọi service → trả JSON. Không có SQL / nghiệp vụ ở đây.
+const input = (req) => ({ user: req.user, params: req.params, query: req.query, body: req.body });
 
-export async function checkin(req, res, next) {
-  try {
-    const qrCode = req.params.qrCode ?? req.body?.qrCode;
-    const result = await svc.checkinByQr(qrCode);
-    res.json({ ticket: result });
-  } catch (err) {
-    next(err);
-  }
-}
+export const listValidTickets = asyncHandler(async (req, res) => {
+  res.json(await service.listValidTickets(input(req)));
+});
+
+export const syncCheckins = asyncHandler(async (req, res) => {
+  res.json(await service.syncCheckins(input(req)));
+});

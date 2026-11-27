@@ -1,163 +1,210 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import QRCode from 'qrcode';
-import { ticketsApi } from '../api/ticketsApi.js';
+// [#6] Vé của tôi (loại f: join) · hủy vé/đơn (loại c). Thiết kế ưu tiên điện thoại.
+// Vé được lưu vào localStorage sau mỗi lần tải để xem lại khi mất mạng.
+// Phụ trách: TV5 (#6)
+import { useRef, useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { bookingApi } from '../api/bookingApi.js';
+import { useAsync } from '../lib/useAsync.js';
+import { money, shortDate, timeStr } from '../lib/format.js';
+import { ErrorBox, Loading } from '../components/ui.jsx';
 
-const STATUS_LABEL = { VALID: 'Hợp lệ', CHECKED_IN: 'Đã soát', CANCELLED: 'Đã hủy' };
-const STATUS_COLOR = {
-  VALID:      'bg-emerald-100 text-emerald-800',
-  CHECKED_IN: 'bg-blue-100 text-blue-800',
-  CANCELLED:  'bg-gray-100 text-gray-500',
-};
-const money = (n) => Number(n).toLocaleString('vi-VN') + ' ₫';
+const CACHE_KEY = 'ticketrush_tickets_cache';
 
-// ── QR Canvas ────────────────────────────────────────────────────────────────
-function QrCanvas({ value, size = 100 }) {
-  const canvasRef = useRef(null);
-  useEffect(() => {
-    if (canvasRef.current && value) {
-      QRCode.toCanvas(canvasRef.current, value, { width: size, margin: 1 }, (err) => {
-        if (err) console.error('QR error', err);
-      });
-    }
-  }, [value, size]);
-  return <canvas ref={canvasRef} width={size} height={size} className="rounded" title={value} />;
+async function loadTickets() {
+  try {
+    const list = await bookingApi.myTickets();
+    localStorage.setItem(CACHE_KEY, JSON.stringify(list));
+    return { list, cached: false };
+  } catch (e) {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (raw) return { list: JSON.parse(raw), cached: true };
+    throw e;
+  }
 }
 
-// ── Ticket Card ───────────────────────────────────────────────────────────────
-function TicketCard({ ticket, onCancel }) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr]   = useState('');
+const STATUS = {
+  VALID: ['text-emerald-700', 'Hợp lệ'],
+  CHECKED_IN: ['text-gray-500', 'Đã sử dụng'],
+  CANCELLED: ['text-red-700', 'Đã hủy'],
+};
 
-  async function handleCancel() {
-    if (!window.confirm('Hủy vé này? Ghế sẽ được giải phóng.')) return;
-    setBusy(true);
-    setErr('');
-    try {
-      await onCancel(ticket.orderId);
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setBusy(false);
-    }
+// 7f3a·c21e·9b04
+const shortCode = (qr) => (qr.replace(/-/g, '').slice(0, 12).match(/.{1,4}/g) ?? []).join('·');
+
+// Mã vạch trang trí, sinh cố định từ mã QR (mỗi ký tự hex quyết định độ rộng một vạch)
+function Barcode({ value }) {
+  let x = 0;
+  const bars = [];
+  for (const ch of value.replace(/-/g, '')) {
+    const n = parseInt(ch, 16);
+    const w = 1 + (n % 3);
+    if (n % 2 === 0) bars.push(<rect key={x} x={x} y="0" width={w} height="36" />);
+    x += w + 1;
   }
-
-  const canCancel = ticket.ticketStatus === 'VALID' && ticket.orderStatus !== 'CANCELLED';
-
   return (
-    <li className="flex flex-wrap items-start gap-4 px-5 py-4">
-      {/* QR Code */}
-      <div className="flex flex-col items-center gap-1 rounded-lg border border-gray-200 bg-white p-2 shadow-sm">
-        <QrCanvas value={ticket.qrCode} size={88} />
-        <p className="max-w-[88px] truncate text-[9px] text-gray-400 font-mono">{ticket.qrCode.slice(0, 12)}…</p>
-      </div>
-
-      {/* Info */}
-      <div className="flex-1 min-w-0 space-y-1.5">
-        <p className="font-semibold text-gray-900">{ticket.seatLabel}</p>
-        <p className="text-sm text-gray-600">
-          Khu <strong>{ticket.zoneName}</strong> · Hàng {ticket.rowLabel} Ghế {ticket.seatNo}
-        </p>
-        <p className="text-sm font-bold text-indigo-700">{money(ticket.price)}</p>
-        {err && <p className="text-xs text-red-600">{err}</p>}
-      </div>
-
-      {/* Status + Cancel */}
-      <div className="flex flex-col items-end gap-2">
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_COLOR[ticket.ticketStatus] ?? 'bg-gray-100 text-gray-600'}`}>
-          {STATUS_LABEL[ticket.ticketStatus] ?? ticket.ticketStatus}
-        </span>
-        {canCancel && (
-          <button
-            type="button"
-            onClick={handleCancel}
-            disabled={busy}
-            className="rounded border border-red-300 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
-          >
-            {busy ? 'Đang hủy…' : 'Hủy vé'}
-          </button>
-        )}
-      </div>
-    </li>
+    <svg viewBox={'0 0 ' + x + ' 36'} preserveAspectRatio="none" className="w-full h-9" fill="#14151a" aria-hidden="true">
+      {bars}
+    </svg>
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
-export default function MyTicketsPage() {
-  const [tickets, setTickets] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState('');
+// Một dòng hóa đơn: nhãn ..... giá trị
+function Line({ label, children, strong }) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <span className="text-gray-600 shrink-0">{label}</span>
+      <span className="flex-1 border-b-2 border-dotted border-black/25 translate-y-[-3px]" />
+      <span className={'text-right ' + (strong ? 'font-bold text-base' : 'font-medium')}>{children}</span>
+    </div>
+  );
+}
 
-  function load() {
-    setLoading(true);
-    ticketsApi.mine()
-      .then((data) => setTickets(Array.isArray(data) ? data : (data?.tickets || [])))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(() => { load(); }, []);
-
-  async function handleCancel(orderId) {
-    await bookingApi.cancel(orderId);
-    load(); // refresh list
-  }
-
-  if (loading) return <p className="text-gray-500 animate-pulse">Đang tải vé…</p>;
-  if (error)   return <p role="alert" className="text-red-700">{error}</p>;
-
-  // Nhóm vé theo sự kiện (chỉ hiện vé chưa hủy trước, hủy sau)
-  const byEvent = tickets.reduce((acc, t) => {
-    const key = t.eventId;
-    if (!acc[key]) acc[key] = { eventTitle: t.eventTitle, eventDate: t.eventDate, venueName: t.venueName, city: t.city, tickets: [] };
-    acc[key].tickets.push(t);
-    return acc;
-  }, {});
-
-  const validCount = tickets.filter((t) => t.ticketStatus === 'VALID').length;
+function TicketCard({ t, index, total, onCancel }) {
+  const [bright, setBright] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [tone, label] = STATUS[t.status] ?? STATUS.VALID;
+  const inactive = t.status !== 'VALID';
 
   return (
-    <div className="space-y-8">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-950">Vé của tôi</h1>
-          <p className="mt-1 text-sm text-gray-500">{validCount} vé hợp lệ · {tickets.length} vé tổng</p>
-        </div>
-        <Link to="/" className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800">
-          + Mua thêm vé
-        </Link>
-      </header>
+    <div className="min-w-full snap-center pr-3 last:pr-0">
+      <div className="receipt">
+        <div className="receipt-paper px-6 pt-5 pb-6 font-mono text-[13px] text-ink">
+          <div className="text-center">
+            <p className="text-xl font-extrabold tracking-[0.2em]">TICKETRUSH</p>
+            <p className="text-[11px] tracking-[0.25em] text-gray-500">VÉ ĐIỆN TỬ · E-TICKET</p>
+          </div>
 
-      {tickets.length === 0 && (
-        <div className="rounded-xl border border-dashed border-gray-300 py-16 text-center">
-          <p className="text-gray-500 text-lg">🎫 Bạn chưa có vé nào.</p>
-          <Link to="/" className="mt-4 inline-block rounded-lg bg-indigo-700 px-5 py-2 text-sm font-semibold text-white">
-            Xem sự kiện
-          </Link>
+          <div className="receipt-rule my-4" />
+          <p className="text-lg font-bold leading-snug text-center">{t.eventTitle}</p>
+          <p className="text-center text-gray-600 mt-1">{shortDate(t.eventDate)} · {timeStr(t.eventDate)}</p>
+          <p className="text-center text-gray-600">{t.venueName}, {t.city}</p>
+          <div className="receipt-rule my-4" />
+
+          <div className="space-y-2">
+            <Line label="Khu">{t.zone}</Line>
+            <Line label="Ghế" strong>{t.seatLabel}</Line>
+            <Line label="Cổng">{t.gate ?? '—'}</Line>
+            <Line label="Người nhận">{t.holderName}</Line>
+            <Line label="Mã đơn">#{String(t.orderId).slice(-6).toUpperCase()}</Line>
+          </div>
+          {t.price != null && (
+            <>
+              <div className="receipt-rule my-3" />
+              <Line label="THÀNH TIỀN" strong>{money(t.price)}</Line>
+            </>
+          )}
+          <div className="receipt-rule my-4" />
+
+          <div className="relative mx-auto w-fit">
+            <div className={'bg-white p-3 border border-black/15 ' + (inactive ? 'opacity-30' : '')}>
+              <QRCodeSVG value={t.qrCode} size={190} level="M" />
+            </div>
+            <span className={'receipt-stamp absolute -right-5 -bottom-3 bg-white/70 text-sm ' + tone}>{label}</span>
+          </div>
+          <p className="text-center tracking-[0.3em] text-gray-600 mt-4">{shortCode(t.qrCode)}</p>
+
+          <div className="receipt-rule my-4" />
+          <Barcode value={t.qrCode} />
+          <p className="text-center text-[11px] text-gray-500 mt-3">
+            Vé {index + 1} / {total}{total > 1 && ' · vuốt để xem vé kế'}
+          </p>
+          <p className="text-center text-[11px] tracking-widest text-gray-500 mt-1">*** CẢM ƠN QUÝ KHÁCH ***</p>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 mt-4">
+        <button className="btn-ghost py-3 text-base" onClick={() => setBright(true)}>Tăng độ sáng</button>
+        {confirm ? (
+          <button className="btn py-3 text-base bg-red-700 text-white" onClick={() => onCancel(t)}>Xác nhận hủy đơn?</button>
+        ) : (
+          <button
+            className="btn-ghost py-3 text-base text-[#8f2c10] disabled:opacity-40"
+            disabled={t.status !== 'VALID'}
+            onClick={() => setConfirm(true)}
+          >
+            Hủy vé
+          </button>
+        )}
+      </div>
+      {confirm && <p className="text-xs text-gray-500 mt-2">Hủy vé sẽ hủy toàn bộ đơn hàng chứa vé này và hoàn lại các ghế.</p>}
+
+      {bright && (
+        <button className="fixed inset-0 z-50 bg-white grid place-items-center" onClick={() => setBright(false)} aria-label="Đóng">
+          <div className="text-center">
+            <QRCodeSVG value={t.qrCode} size={Math.min(320, window.innerWidth - 64)} level="M" />
+            <p className="font-mono mt-4 text-gray-700">{shortCode(t.qrCode)}</p>
+            <p className="text-sm text-gray-500 mt-6">Chạm để đóng</p>
+          </div>
+        </button>
+      )}
+    </div>
+  );
+}
+
+export default function MyTicketsPage() {
+  const tickets = useAsync(loadTickets, []);
+  const [tab, setTab] = useState('upcoming');
+  const [index, setIndex] = useState(0);
+  const [error, setError] = useState(null);
+  const scroller = useRef(null);
+
+  const list = tickets.data?.list ?? [];
+  const upcoming = list.filter((t) => new Date(t.eventDate) >= Date.now() - 6 * 3600e3 && t.status !== 'CANCELLED');
+  const past = list.filter((t) => !upcoming.includes(t));
+  const shown = tab === 'upcoming' ? upcoming : past;
+
+  async function cancel(t) {
+    setError(null);
+    try {
+      await bookingApi.cancel(t.orderId);
+      tickets.reload();
+    } catch (e) {
+      setError(e);
+    }
+  }
+
+  return (
+    <div className="max-w-md mx-auto">
+      <div className="flex items-center gap-3 flex-wrap mb-3">
+        <span className="rounded-full bg-white border border-black/10 px-4 py-2 text-sm font-semibold text-gray-700">
+          <span className="text-emerald-700">✓</span>{' '}
+          {tickets.data?.cached ? 'Đang xem bản đã lưu trên máy' : 'Đã lưu để xem khi mất mạng'}
+        </span>
+      </div>
+      <h1 className="text-4xl font-extrabold tracking-tight mb-4">Vé của tôi</h1>
+
+      <div className="grid grid-cols-2 gap-1 rounded-2xl bg-black/[0.07] p-1.5 mb-4">
+        {[['upcoming', 'Sắp diễn ra (' + upcoming.length + ')'], ['past', 'Đã qua']].map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => { setTab(k); setIndex(0); scroller.current?.scrollTo({ left: 0 }); }}
+            className={'rounded-xl py-3 font-bold ' + (tab === k ? 'bg-white shadow-sm' : 'text-gray-500')}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tickets.loading && <Loading />}
+      <ErrorBox error={tickets.error ?? error} />
+      {!tickets.loading && shown.length === 0 && !tickets.error && (
+        <p className="text-center text-gray-500 py-12">Chưa có vé nào.</p>
       )}
 
-      {Object.values(byEvent).map((group) => (
-        <section
-          key={group.tickets[0].eventId}
-          className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
-        >
-          <header className="border-b border-gray-100 bg-gray-50 px-5 py-4">
-            <h2 className="font-bold text-gray-900">{group.eventTitle}</h2>
-            <p className="text-sm text-gray-500">
-              📅 {new Date(group.eventDate).toLocaleString('vi-VN')}
-              &nbsp;·&nbsp;📍 {group.venueName}, {group.city}
-            </p>
-          </header>
-
-          <ul className="divide-y divide-gray-100">
-            {group.tickets.map((ticket) => (
-              <TicketCard key={ticket.ticketId} ticket={ticket} onCancel={handleCancel} />
-            ))}
-          </ul>
-        </section>
-      ))}
+      <div
+        ref={scroller}
+        onScroll={(e) => setIndex(Math.round(e.currentTarget.scrollLeft / e.currentTarget.clientWidth))}
+        className="flex overflow-x-auto snap-x snap-mandatory [scrollbar-width:none]"
+      >
+        {shown.map((t, i) => (
+          <TicketCard key={t.ticketId} t={t} index={i} total={shown.length} onCancel={cancel} />
+        ))}
+      </div>
+      {shown.length > 1 && (
+        <div className="flex justify-center gap-1.5 mt-4">
+          {shown.map((t, i) => <span key={t.ticketId} className={'w-2 h-2 rounded-full ' + (i === index ? 'bg-ink' : 'bg-black/20')} />)}
+        </div>
+      )}
     </div>
   );
 }

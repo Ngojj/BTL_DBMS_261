@@ -1,279 +1,224 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { bookingApi } from '../api/bookingApi.js';
+// [#4] Chọn ghế trên sơ đồ realtime và giữ ghế (loại a qua POST /api/orders)
+// Phụ trách: TV5 (sơ đồ ghế realtime, lib/seats.js) + TV4 (#4 mua vé)
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { eventsApi } from '../api/eventsApi.js';
-import { reviewsApi } from '../api/reviewsCheckinApi.js';
+import { bookingApi } from '../api/bookingApi.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useSeats } from '../lib/seats.js';
+import { useAsync } from '../lib/useAsync.js';
+import { fullDate, money, timeStr } from '../lib/format.js';
+import { ErrorBox, Loading } from '../components/ui.jsx';
+import Reviews from '../components/Reviews.jsx';
+
+const SEAT_STYLE = {
+  AVAILABLE: 'bg-white border-gray-400 hover:border-royal hover:bg-indigo-50 cursor-pointer',
+  SELECTED: 'bg-royal border-royal cursor-pointer',
+  HELD: 'bg-gold border-gold cursor-not-allowed',
+  SOLD: 'bg-sold border-sold cursor-not-allowed',
+};
+
+function Seat({ seat, state, onClick }) {
+  return (
+    <button
+      type="button"
+      title={'Ghế ' + seat.row + seat.number}
+      aria-label={'Ghế ' + seat.row + seat.number}
+      disabled={state === 'HELD' || state === 'SOLD'}
+      onClick={onClick}
+      className={'w-6 h-6 rounded-[5px] border transition-colors shrink-0 ' + SEAT_STYLE[state]}
+    />
+  );
+}
+
+function ZoneBlock({ zone, rows, stateOf, toggle }) {
+  return (
+    <div className="mb-5">
+      <p className="text-center text-xs font-bold tracking-wider text-gray-600 mb-2">
+        {zone.name.toUpperCase()} · {money(zone.price)}
+      </p>
+      <div className="space-y-1">
+        {rows.map(({ row, seats }) => {
+          const half = Math.ceil(seats.length / 2);
+          return (
+            <div key={row} className="flex items-center justify-center gap-1">
+              <span className="w-5 text-xs font-bold text-gray-600 text-center">{row}</span>
+              <div className="flex gap-1">
+                {seats.slice(0, half).map((s) => <Seat key={s.seatId} seat={s} state={stateOf(s)} onClick={() => toggle(s)} />)}
+              </div>
+              <span className="w-6 shrink-0" />
+              <div className="flex gap-1">
+                {seats.slice(half).map((s) => <Seat key={s.seatId} seat={s} state={stateOf(s)} onClick={() => toggle(s)} />)}
+              </div>
+              <span className="w-5 text-xs font-bold text-gray-600 text-center">{row}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function EventDetailPage() {
   const { eventId } = useParams();
-  const navigate = useNavigate();
   const { user } = useAuth();
-
-  const [event, setEvent] = useState(null);
-  const [zones, setZones] = useState([]);
-  const [zoneId, setZoneId] = useState('');
-  const [seats, setSeats] = useState([]);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const event = useAsync(() => eventsApi.get(eventId), [eventId]);
+  const { seats } = useSeats(eventId);
   const [selected, setSelected] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
 
-  // Reviews
-  const [reviewsData, setReviewsData] = useState({ reviews: [], stats: { count: 0, avg: 0 } });
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState('');
-  const [reviewError, setReviewError] = useState('');
-  const [reviewSuccess, setReviewSuccess] = useState('');
+  const max = event.data?.maxTicketsPerUser ?? 4;
+  const zones = useMemo(() => [...(event.data?.zones ?? [])].sort((a, b) => b.price - a.price), [event.data]);
+  const seatById = useMemo(() => Object.fromEntries(seats.map((s) => [s.seatId, s])), [seats]);
 
+  // zone → [{ row, seats }]
+  const layout = useMemo(() => {
+    const byZone = {};
+    for (const s of seats) ((byZone[s.zone] ??= {})[s.row] ??= []).push(s);
+    return Object.fromEntries(
+      Object.entries(byZone).map(([z, rows]) => [
+        z,
+        Object.keys(rows).sort().map((row) => ({ row, seats: rows[row].sort((a, b) => a.number - b.number) })),
+      ]),
+    );
+  }, [seats]);
+
+  // Ghế đã chọn mà bị người khác lấy mất (realtime) thì bỏ khỏi danh sách chọn
   useEffect(() => {
-    eventsApi.get(eventId).then((row) => {
-      setEvent(row);
-      setZones(row.zones ?? []);
-      if (row.zones?.[0]) setZoneId(String(row.zones[0].zone_id));
-    }).catch((err) => setError(err.message));
+    setSelected((cur) => {
+      const keep = cur.filter((id) => seatById[id]?.status === 'AVAILABLE');
+      if (keep.length !== cur.length) setMsg('Có ghế vừa được người khác giữ, đã bỏ khỏi lựa chọn của bạn.');
+      return keep.length === cur.length ? cur : keep;
+    });
+  }, [seatById]);
 
-    loadReviews();
-  }, [eventId]);
+  const stateOf = (s) => (selected.includes(s.seatId) ? 'SELECTED' : s.status);
+  const priceOf = (s) => zones.find((z) => z.name === s.zone)?.price ?? 0;
+  const chosen = selected.map((id) => seatById[id]).filter(Boolean);
+  const total = chosen.reduce((sum, s) => sum + priceOf(s), 0);
 
-  function loadReviews() {
-    reviewsApi.list(eventId)
-      .then((res) => {
-        setReviewsData({
-          reviews: res.reviews || [],
-          stats: {
-            count: res.stats?.count ? Number(res.stats.count) : (res.reviews?.length || 0),
-            avg: res.stats?.avg ? Number(res.stats.avg).toFixed(1) : 0,
-          },
-        });
-      })
-      .catch(() => {});
+  function toggle(seat) {
+    if (seat.status !== 'AVAILABLE') return;
+    if (selected.includes(seat.seatId)) return setSelected(selected.filter((id) => id !== seat.seatId));
+    if (selected.length >= max) return setMsg('Tối đa ' + max + ' vé mỗi tài khoản cho sự kiện này.');
+    setMsg(null);
+    setSelected([...selected, seat.seatId]);
   }
 
-  useEffect(() => {
-    if (!zoneId) return;
-    setSelected([]);
-    eventsApi.seats(zoneId).then(setSeats).catch((err) => setError(err.message));
-  }, [zoneId]);
-
-  function toggleSeat(seatId) {
-    setSelected((current) => current.includes(seatId) ? current.filter((id) => id !== seatId) : [...current, seatId]);
-  }
-
-  async function reserveSeats() {
-    if (!user) {
-      navigate('/login', { state: { from: `/events/${eventId}` } });
-      return;
-    }
-    setLoading(true);
-    setError('');
+  async function hold() {
+    if (!user) return navigate('/login', { state: { from: location.pathname } });
+    setBusy(true);
+    setMsg(null);
     try {
-      const order = await bookingApi.createOrder({ eventId, seatIds: selected });
-      navigate(`/checkout/${order.orderId}`);
-    } catch (err) {
-      setError(err.message);
-      const updatedSeats = await eventsApi.seats(zoneId).catch(() => []);
-      setSeats(updatedSeats);
+      const order = await bookingApi.createOrder({ eventId, seatIds: selected }, user, chosen.map((s) => ({ ...s, price: priceOf(s) })));
+      navigate('/checkout/' + order.orderId);
+    } catch (e) {
+      setMsg(e.message);
+      setSelected([]);
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   }
 
-  async function submitReview(e) {
-    e.preventDefault();
-    if (!user) {
-      navigate('/login', { state: { from: `/events/${eventId}` } });
-      return;
-    }
-    setReviewError('');
-    setReviewSuccess('');
-    try {
-      await reviewsApi.create(eventId, { rating: Number(rating), comment });
-      setReviewSuccess('Đánh giá của bạn đã được ghi nhận!');
-      setComment('');
-      loadReviews();
-    } catch (err) {
-      setReviewError(err.message || 'Không thể gửi đánh giá');
-    }
-  }
+  if (event.loading) return <Loading />;
+  if (event.error) return <ErrorBox error={event.error} />;
+  const e = event.data;
 
-  const selectedTotal = seats.filter((seat) => selected.includes(String(seat.seat_id)))
-    .reduce((sum, seat) => sum + Number(seat.price), 0);
-
-  const isSaleOpen = event ? new Date(event.sale_open_at) <= new Date() : true;
+  const rowRange = (z) => {
+    const rows = (layout[z.name] ?? []).map((r) => r.row);
+    return rows.length ? `hàng ${rows[0]}–${rows[rows.length - 1]}` : '';
+  };
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <Link to="/" className="text-sm font-medium text-indigo-700 hover:underline">← Danh sách sự kiện</Link>
-        <Link
-          to={`/events/${eventId}/waiting-room`}
-          className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 text-amber-900 px-3 py-1 text-xs font-bold hover:bg-amber-200 transition"
-        >
-          <span>⏳ Phòng chờ ảo (Waiting Room)</span>
-        </Link>
-      </div>
+    <>
+    <div className="grid gap-6 lg:grid-cols-[1fr_350px] items-start">
+      <section className="card p-5 sm:p-7">
+        <Link to="/" className="text-sm font-bold text-brand">← Tất cả sự kiện</Link>
+        <h1 className="text-3xl font-extrabold tracking-tight mt-1">{e.title}</h1>
+        <p className="text-gray-600 mb-5">
+          {timeStr(e.eventDate)} · {fullDate(e.eventDate)} · {e.venueName}, {e.city}
+        </p>
 
-      {event && (
-        <header className="border-b border-gray-200 pb-5 space-y-2">
-          <p className="text-sm text-gray-600">{event.genre_name} · {event.city}</p>
-          <h1 className="text-3xl font-bold text-gray-950">{event.title}</h1>
-          <p className="text-gray-700">📍 {event.venue_name} · 📅 {new Date(event.event_date).toLocaleString('vi-VN')}</p>
-          {!isSaleOpen && (
-            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 flex items-center justify-between">
-              <div>
-                <strong>Chưa đến giờ mở bán chính thức!</strong> Sự kiện mở bán lúc: {new Date(event.sale_open_at).toLocaleString('vi-VN')}
-              </div>
-              <Link
-                to={`/events/${eventId}/waiting-room`}
-                className="rounded-lg bg-amber-600 text-white px-3 py-1.5 font-bold hover:bg-amber-700"
-              >
-                Vào hàng đợi ngay
-              </Link>
+        <div className="overflow-x-auto pb-2">
+          <div className="min-w-[640px]">
+            <div className="mx-auto max-w-[590px] bg-ink text-white text-center rounded-b-[36px] py-3 text-sm font-bold tracking-[0.25em] mb-5">
+              SÂN KHẤU
             </div>
-          )}
-        </header>
-      )}
-
-      {error && <p role="alert" className="text-red-700 bg-red-50 p-3 rounded-lg border border-red-200 text-sm">{error}</p>}
-
-      {/* Sơ đồ chọn ghế */}
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold">Chọn ghế</h2>
-          <label className="flex items-center gap-2 text-sm font-medium">
-            Khu vực
-            <select
-              value={zoneId}
-              onChange={(e) => setZoneId(e.target.value)}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-            >
-              {zones.map((zone) => (
-                <option key={zone.zone_id} value={zone.zone_id}>
-                  {zone.name} · {Number(zone.price).toLocaleString('vi-VN')} ₫
-                </option>
-              ))}
-            </select>
-          </label>
+            {seats.length === 0 && <p className="text-center text-gray-500 py-10">Đang tải sơ đồ ghế…</p>}
+            {zones.map((z) => (
+              <ZoneBlock key={z.zoneId} zone={z} rows={layout[z.name] ?? []} stateOf={stateOf} toggle={toggle} />
+            ))}
+          </div>
         </div>
 
-        {seats.length === 0 ? (
-          <p className="text-gray-600">Khu vực chưa có ghế.</p>
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-center gap-6 text-xs text-gray-600">
-              <span className="flex items-center gap-1.5"><span className="h-4 w-4 rounded border border-gray-300 bg-white"></span> Trống</span>
-              <span className="flex items-center gap-1.5"><span className="h-4 w-4 rounded bg-indigo-700"></span> Đang chọn</span>
-              <span className="flex items-center gap-1.5"><span className="h-4 w-4 rounded bg-gray-200"></span> Đã bán / Giữ</span>
-            </div>
-            <div className="grid min-w-max grid-cols-8 gap-2 sm:grid-cols-10 md:grid-cols-12 justify-center">
-              {seats.map((seat) => {
-                const id = String(seat.seat_id);
-                const isSelected = selected.includes(id);
-                const available = seat.status === 'AVAILABLE';
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    disabled={!available}
-                    aria-pressed={isSelected}
-                    onClick={() => toggleSeat(id)}
-                    title={`Hàng ${seat.row_label}, ghế ${seat.seat_no}`}
-                    className={`h-10 w-10 rounded border text-xs font-medium transition ${
-                      isSelected
-                        ? 'border-indigo-800 bg-indigo-700 text-white font-bold shadow'
-                        : available
-                        ? 'border-gray-300 bg-white text-gray-800 hover:border-indigo-600 hover:bg-indigo-50'
-                        : 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
-                    }`}
-                  >
-                    {seat.row_label}{seat.seat_no}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-6 text-sm text-gray-700">
+          {[['AVAILABLE', 'Còn trống'], ['SELECTED', 'Ghế bạn chọn'], ['HELD', 'Người khác đang giữ'], ['SOLD', 'Đã bán']].map(([k, label]) => (
+            <span key={k} className="flex items-center gap-2">
+              <span className={'w-5 h-5 rounded-[5px] border ' + SEAT_STYLE[k].split(' cursor')[0].replace(/hover:\S+/g, '')} /> {label}
+            </span>
+          ))}
+        </div>
       </section>
 
-      {/* Footer đặt vé */}
-      <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-gray-200 pt-4 bg-white p-4 rounded-xl shadow-sm">
-        <div>
-          <p className="text-sm text-gray-600">{selected.length} ghế đã chọn</p>
-          <p className="text-2xl font-bold text-indigo-700">{selectedTotal.toLocaleString('vi-VN')} ₫</p>
-        </div>
-        <button
-          type="button"
-          onClick={reserveSeats}
-          disabled={!selected.length || loading}
-          className="rounded-lg bg-indigo-700 px-6 py-3 font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50 shadow"
-        >
-          {loading ? 'Đang giữ ghế…' : 'Tiếp tục thanh toán →'}
-        </button>
-      </footer>
-
-      {/* Đánh giá sau sự kiện (#h aggregate) */}
-      <section className="space-y-4 border-t border-gray-200 pt-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-950">Đánh giá sự kiện</h2>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-amber-500 text-lg">★</span>
-            <span className="font-bold text-gray-900">{reviewsData.stats.avg} / 5</span>
-            <span className="text-gray-500">({reviewsData.stats.count} lượt đánh giá)</span>
-          </div>
+      <aside className="space-y-4 lg:sticky lg:top-4">
+        <div className="card p-5">
+          <h2 className="font-bold text-lg mb-3">Giá vé</h2>
+          <ul className="space-y-2 text-[15px]">
+            {zones.map((z) => (
+              <li key={z.zoneId} className="flex justify-between gap-2">
+                <span className="text-gray-600">{z.name} ({rowRange(z)})</span>
+                <b>{money(z.price)}</b>
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm text-gray-500 mt-3">Tối đa {max} vé mỗi tài khoản cho sự kiện này.</p>
         </div>
 
-        {/* Form gửi review */}
-        <form onSubmit={submitReview} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-3">
-          <h3 className="text-sm font-bold text-gray-800">Gửi đánh giá của bạn (Dành cho khán giả đã mua vé)</h3>
-          <div className="flex items-center gap-3">
-            <label className="text-xs font-semibold text-gray-600">Số sao:</label>
-            <select
-              value={rating}
-              onChange={(e) => setRating(Number(e.target.value))}
-              className="rounded border border-gray-300 px-2 py-1 text-sm bg-white"
-            >
-              <option value="5">⭐⭐⭐⭐⭐ (5 sao)</option>
-              <option value="4">⭐⭐⭐⭐ (4 sao)</option>
-              <option value="3">⭐⭐⭐ (3 sao)</option>
-              <option value="2">⭐⭐ (2 sao)</option>
-              <option value="1">⭐ (1 sao)</option>
-            </select>
+        <div className="card p-5 flex flex-col min-h-[300px]">
+          <div className="flex justify-between items-baseline mb-3">
+            <h2 className="font-bold text-lg">Ghế đã chọn</h2>
+            <span className="text-sm text-gray-500">{selected.length} / {max} vé</span>
           </div>
-          <textarea
-            placeholder="Cảm nhận của bạn về buổi diễn, âm thanh, địa điểm..."
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            rows={2}
-            className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:outline-none focus:border-indigo-600"
-          />
-          {reviewError && <p className="text-xs text-red-600">{reviewError}</p>}
-          {reviewSuccess && <p className="text-xs text-emerald-600">{reviewSuccess}</p>}
-          <button
-            type="submit"
-            className="rounded-lg bg-indigo-700 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-800"
-          >
-            Gửi nhận xét
-          </button>
-        </form>
-
-        {/* Danh sách review */}
-        <div className="space-y-2">
-          {reviewsData.reviews.length === 0 ? (
-            <p className="text-xs text-gray-500 italic">Chưa có đánh giá nào cho sự kiện này.</p>
-          ) : (
-            reviewsData.reviews.map((rev) => (
-              <div key={rev.review_id} className="rounded-lg border border-gray-100 bg-gray-50 p-3 text-xs space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-gray-900">{rev.full_name || 'Khán giả'}</span>
-                  <span className="text-amber-500 font-bold">{'★'.repeat(rev.rating)}</span>
+          <div className="space-y-2">
+            {chosen.map((s) => (
+              <div key={s.seatId} className="flex items-center justify-between rounded-xl bg-indigo-50 px-4 py-2.5">
+                <div>
+                  <p className="font-bold text-royal leading-tight">Ghế {s.row}{s.number}</p>
+                  <p className="text-xs text-gray-500">{s.zone}</p>
                 </div>
-                {rev.comment && <p className="text-gray-700">{rev.comment}</p>}
-                <p className="text-[10px] text-gray-400">{new Date(rev.created_at).toLocaleDateString('vi-VN')}</p>
+                <div className="flex items-center gap-3">
+                  <b>{money(priceOf(s))}</b>
+                  <button
+                    aria-label={'Bỏ ghế ' + s.row + s.number}
+                    onClick={() => toggle(s)}
+                    className="w-8 h-8 rounded-lg bg-white border border-black/10 hover:bg-black/5"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
-            ))
-          )}
+            ))}
+            {chosen.length === 0 && <p className="text-sm text-gray-400 py-4 text-center">Bấm vào ghế trống để chọn.</p>}
+          </div>
+
+          <div className="mt-auto pt-5 border-t border-black/10">
+            {msg && <p className="text-sm text-red-600 mb-3">{msg}</p>}
+            <div className="flex justify-between items-baseline mb-3">
+              <span className="text-gray-600">Tạm tính</span>
+              <span className="text-2xl font-extrabold">{money(total)}</span>
+            </div>
+            <button className="btn-brand w-full py-3 text-base" disabled={selected.length === 0 || busy} onClick={hold}>
+              {busy ? 'Đang giữ ghế…' : 'Giữ ghế và thanh toán'}
+            </button>
+            <p className="text-xs text-gray-500 text-center mt-3">Ghế được giữ cho bạn trong 10 phút.</p>
+          </div>
         </div>
-      </section>
+      </aside>
     </div>
+    <Reviews eventId={eventId} />
+    </>
   );
 }

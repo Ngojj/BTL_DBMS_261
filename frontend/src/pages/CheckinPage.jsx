@@ -1,125 +1,126 @@
-import { useState } from 'react';
-import { checkinApi } from '../api/reviewsCheckinApi.js';
-import { useAuth } from '../context/AuthContext.jsx';
+// [#7] Soát vé QR ở cổng, chạy được khi mất mạng (Firestore offline → đồng bộ PostgreSQL). Loại c.
+// Phụ trách: TV5
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import QrScanner from '../components/QrScanner.jsx';
+import { eventsApi } from '../api/eventsApi.js';
+import { checkTicket, preloadValidTickets } from '../lib/checkin.js';
+import { useAsync, useOnline } from '../lib/useAsync.js';
 
-const STATUS_COLOR = { VALID: 'bg-green-50 border-green-400', CHECKED_IN: 'bg-blue-50 border-blue-400', CANCELLED: 'bg-red-50 border-red-400' };
-const STATUS_LABEL = { VALID: '✓ Hợp lệ', CHECKED_IN: '✓ Đã soát', CANCELLED: '✗ Đã hủy' };
+const RESULT = {
+  valid: { box: 'bg-emerald-700', title: 'Vé hợp lệ', icon: '✓' },
+  used: { box: 'bg-amber-600', title: 'Vé đã được soát', icon: '!' },
+  invalid: { box: 'bg-red-700', title: 'Vé không hợp lệ', icon: '✕' },
+  error: { box: 'bg-red-700', title: 'Chưa tra được vé (chưa có dữ liệu offline)', icon: '✕' },
+};
 
 export default function CheckinPage() {
-  const { user } = useAuth();
-  const [qrInput, setQrInput] = useState('');
-  const [ticket,  setTicket]  = useState(null);
-  const [result,  setResult]  = useState(null); // { success, message }
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
+  const [params, setParams] = useSearchParams();
+  const gate = params.get('gate') ?? '1';
+  const online = useOnline();
+  const events = useAsync(() => eventsApi.list(), []);
+  const [eventId, setEventId] = useState(params.get('eventId') ?? '');
+  const [result, setResult] = useState(null);
+  const [checked, setChecked] = useState(0);
+  const [pending, setPending] = useState(0);
+  const [preloaded, setPreloaded] = useState(null);
+  const [manual, setManual] = useState(null); // null = ẩn ô nhập
+  const last = useRef({ code: '', at: 0 });
 
-  if (!user || !['STAFF', 'ADMIN'].includes(user.role)) {
-    return <p className="p-8 text-red-700">Chỉ STAFF hoặc ADMIN mới được truy cập trang này.</p>;
-  }
+  useEffect(() => {
+    if (!eventId && events.data?.length) setEventId(String(events.data[0].eventId));
+  }, [events.data, eventId]);
 
-  async function lookup(e) {
-    e.preventDefault();
-    if (!qrInput.trim()) return;
-    setError(''); setTicket(null); setResult(null); setLoading(true);
-    try {
-      const data = await checkinApi.lookup(qrInput.trim());
-      setTicket(data.ticket);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }
+  // Tải trước danh sách vé của sự kiện vào cache để soát được cả khi rớt mạng
+  useEffect(() => {
+    if (!eventId || !online) return;
+    preloadValidTickets(eventId).then(setPreloaded).catch(() => setPreloaded(null));
+  }, [eventId, online]);
 
-  async function doCheckin() {
-    if (!ticket) return;
-    setLoading(true); setResult(null);
-    try {
-      const data = await checkinApi.checkin(ticket.qrCode);
-      const t = data.ticket;
-      setTicket(t);
-      setResult({
-        success: true,
-        message: t.alreadyCheckedIn ? 'Vé đã được soát trước đó.' : 'Soát vé thành công!',
-      });
-    } catch (err) {
-      setResult({ success: false, message: err.message });
-    } finally {
-      setLoading(false);
-    }
-  }
+  const handleCode = useCallback(
+    async (raw) => {
+      const code = raw.trim();
+      if (!code || !eventId) return;
+      const now = Date.now();
+      if (last.current.code === code && now - last.current.at < 3000) return; // camera đọc lặp
+      last.current = { code, at: now };
+      const r = await checkTicket(code, eventId, (d) => setPending((p) => Math.max(0, p + d)));
+      setResult(r);
+      if (r.status === 'valid') setChecked((c) => c + 1);
+    },
+    [eventId],
+  );
 
-  function reset() {
-    setQrInput(''); setTicket(null); setResult(null); setError('');
-  }
+  const eventTitle = events.data?.find((e) => String(e.eventId) === eventId)?.title;
+  const res = result && RESULT[result.status];
 
   return (
-    <div className="mx-auto max-w-lg space-y-6">
-      <h1 className="text-2xl font-bold text-gray-950">Soát vé</h1>
-
-      {/* ── Input QR ── */}
-      <form onSubmit={lookup} className="flex gap-2">
-        <input
-          id="qrInput"
-          value={qrInput}
-          onChange={(e) => setQrInput(e.target.value)}
-          placeholder="Nhập hoặc quét mã QR (UUID vé)…"
-          className="flex-1 rounded border border-gray-300 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          autoFocus
-        />
-        <button type="submit" disabled={loading || !qrInput.trim()}
-          className="rounded bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-          {loading ? '…' : 'Tra cứu'}
-        </button>
-      </form>
-
-      {error && <p role="alert" className="rounded border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-
-      {/* ── Thông tin vé ── */}
-      {ticket && (
-        <div className={`rounded-xl border-2 px-5 py-5 space-y-3 ${STATUS_COLOR[ticket.status] ?? 'bg-gray-50 border-gray-300'}`}>
-          <div className="flex items-center justify-between">
-            <p className="font-bold text-lg text-gray-900">{ticket.holderName}</p>
-            <span className={`rounded-full px-3 py-1 text-sm font-semibold ${ticket.status === 'VALID' ? 'bg-green-600 text-white' : ticket.status === 'CHECKED_IN' ? 'bg-blue-600 text-white' : 'bg-gray-400 text-white'}`}>
-              {STATUS_LABEL[ticket.status] ?? ticket.status}
-            </span>
-          </div>
-          <div className="space-y-1 text-sm text-gray-700">
-            <p><strong>Sự kiện:</strong> {ticket.eventTitle}</p>
-            <p><strong>Ngày:</strong> {new Date(ticket.eventDate).toLocaleString('vi-VN')}</p>
-            <p><strong>Ghế:</strong> {ticket.seatLabel} (Hàng {ticket.rowLabel}, Số {ticket.seatNo})</p>
-            <p><strong>Khu:</strong> {ticket.zoneName}</p>
-            {ticket.checkedInAt && <p className="text-blue-700"><strong>Soát lúc:</strong> {new Date(ticket.checkedInAt).toLocaleString('vi-VN')}</p>}
-          </div>
-
-          {result && (
-            <p className={`rounded px-3 py-2 text-sm font-semibold ${result.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-              {result.message}
+    <div className="min-h-screen bg-ink text-white">
+      <div className="max-w-md mx-auto p-4 min-h-screen flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-white/60">
+              Cổng {gate} · Nhân viên soát vé · <Link to="/" className="underline">thoát</Link>
             </p>
-          )}
-
-          <div className="flex gap-2 pt-1">
-            {ticket.status === 'VALID' && !result?.success && (
-              <button onClick={doCheckin} disabled={loading}
-                className="rounded bg-green-700 px-5 py-2 font-semibold text-white disabled:opacity-50">
-                {loading ? 'Đang soát…' : 'Xác nhận soát vé'}
-              </button>
-            )}
-            <button onClick={reset}
-              className="rounded border border-gray-300 px-5 py-2 font-semibold text-gray-700">
-              Quét vé mới
-            </button>
+            <select
+              aria-label="Sự kiện"
+              value={eventId}
+              onChange={(e) => { setEventId(e.target.value); setParams({ eventId: e.target.value, gate }); }}
+              className="bg-transparent text-xl font-extrabold w-full focus:outline-none"
+            >
+              {events.data?.map((e) => (
+                <option key={e.eventId} value={e.eventId} className="text-ink text-base">{e.title}</option>
+              ))}
+            </select>
           </div>
+          <span className={'shrink-0 rounded-full px-4 py-2 text-sm font-bold ' + (online ? 'bg-emerald-600' : 'bg-gold text-ink')}>
+            {online ? 'Trực tuyến' : '⌀ Ngoại tuyến'}
+          </span>
         </div>
-      )}
 
-      {/* ── Hướng dẫn ── */}
-      {!ticket && !error && (
-        <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 py-12 text-center">
-          <p className="text-gray-500 text-sm">Nhập UUID vé vào ô trên hoặc dùng máy quét QR.</p>
-          <p className="mt-1 text-xs text-gray-400">Soát vé offline: trang này dùng Firestore khi mất mạng (cấu hình TV5).</p>
+        <p className="rounded-xl bg-white/10 px-4 py-3 text-sm text-white/80">
+          Vẫn soát được vé khi mất mạng. Lượt soát được lưu trên máy và tự đồng bộ khi có mạng.
+          {preloaded != null && <span className="text-white/50"> Đã tải sẵn {preloaded} vé của sự kiện này.</span>}
+        </p>
+
+        <QrScanner onScan={handleCode} />
+
+        {res && (
+          <div className={'rounded-2xl px-5 py-4 flex items-center gap-4 ' + res.box}>
+            <span className="w-14 h-14 rounded-full bg-white/20 grid place-items-center text-2xl shrink-0">{res.icon}</span>
+            <div className="min-w-0">
+              <p className="text-2xl font-extrabold leading-tight">{res.title}</p>
+              {result.info && <p className="text-white/85 font-semibold truncate">{result.info.seatLabel} · {result.info.holderName}</p>}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-auto">
+          <div className="flex justify-between text-sm text-white/60 mb-3">
+            <span>Đã soát tại cổng này: {checked} lượt</span>
+            <span>Chờ đồng bộ: {pending} lượt</span>
+          </div>
+          {manual === null ? (
+            <button onClick={() => setManual('')} className="w-full rounded-2xl bg-white/10 hover:bg-white/15 py-4 font-bold">
+              Nhập mã vé thủ công
+            </button>
+          ) : (
+            <form
+              onSubmit={(e) => { e.preventDefault(); handleCode(manual); setManual(''); }}
+              className="flex gap-2"
+            >
+              <input
+                autoFocus
+                value={manual}
+                onChange={(e) => setManual(e.target.value)}
+                placeholder="Dán mã QR (UUID) của vé"
+                className="flex-1 rounded-xl bg-white/10 px-4 py-3 font-mono text-sm focus:outline-none focus:ring-2 ring-glow"
+              />
+              <button className="rounded-xl bg-glow text-ink font-bold px-5">Soát</button>
+            </form>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

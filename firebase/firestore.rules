@@ -1,8 +1,37 @@
 rules_version = '2';
+// TODO [rules] Phụ trách: TV5. Backend dùng Admin SDK nên KHÔNG bị rules chặn.
+// Client chỉ được đọc; riêng STAFF được cập nhật checkedIn/checkedInAt trong validTickets.
+// uid Firebase = String(users.user_id); claim role do backend gắn khi tạo custom token (/api/auth/firebase-token).
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+
+    function signedIn() { return request.auth != null; }
+    function isStaff()  { return signedIn() && request.auth.token.role == 'STAFF'; }
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if false;
+
+      match /seats/{seatId} {
+        allow read: if true;
+        allow write: if false;
+      }
+      match /queue/{userId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow write: if false;
+      }
+    }
+
+    match /validTickets/{qrCode} {
+      allow read: if isStaff();
+      allow update: if isStaff()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkedIn', 'checkedInAt']);
+      allow create, delete: if false;
+    }
+
+    match /notifications/{userId}/items/{id} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow write: if false;
     }
   }
 }

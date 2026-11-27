@@ -1,19 +1,18 @@
-import * as svc from './reviews.service.js';
+// TODO [reviews.controller] Phụ trách: TV1 (giả định – brief chưa phân công)
+import { asyncHandler } from '../../utils/asyncHandler.js';
+import * as service from './reviews.service.js';
 
-export async function postReview(req, res, next) {
-  try {
-    const review = await svc.createReview({ ...req, params: req.params, body: req.body, user: req.user });
-    res.status(201).json({ review });
-  } catch (err) {
-    next(err);
-  }
-}
+// Chỉ đọc request → gọi service → trả JSON. Không có SQL / nghiệp vụ ở đây.
+const input = (req) => ({ user: req.user, params: req.params, query: req.query, body: req.body });
 
-export async function listReviews(req, res, next) {
-  try {
-    const data = await svc.getEventReviews(req);
-    res.json(data);
-  } catch (err) {
-    next(err);
-  }
-}
+export const listReviews = asyncHandler(async (req, res) => {
+  res.json(await service.listReviews(input(req)));
+});
+
+export const reviewSummary = asyncHandler(async (req, res) => {
+  res.json(await service.reviewSummary(input(req)));
+});
+
+export const createReview = asyncHandler(async (req, res) => {
+  res.json(await service.createReview(input(req)));
+});

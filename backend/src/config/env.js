@@ -1,11 +1,4 @@
-import dotenv from 'dotenv';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// Ưu tiên nạp từ backend/.env, sau đó fallback về cwd
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
-dotenv.config();
+import 'dotenv/config';
 
 const required = (name) => {
   const v = process.env[name];
@@ -24,5 +17,6 @@ export const env = {
   // Có FIRESTORE_EMULATOR_HOST thì Admin SDK tự trỏ vào Emulator
   firestoreEmulatorHost: process.env.FIRESTORE_EMULATOR_HOST,
   googleApplicationCredentials: process.env.GOOGLE_APPLICATION_CREDENTIALS, // chỉ khi dùng Firebase thật
+  labResultsDir: process.env.LAB_RESULTS_DIR ?? './lab-results',
   holdMinutes: Number(process.env.SEAT_HOLD_MINUTES ?? 10),
 };

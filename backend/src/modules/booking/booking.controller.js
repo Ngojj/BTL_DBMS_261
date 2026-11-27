@@ -20,3 +20,7 @@ export const cancelOrder = asyncHandler(async (req, res) => {
 export const listMyOrders = asyncHandler(async (req, res) => {
   res.json(await service.listMyOrders(input(req)));
 });
+export const getOrder = asyncHandler(async (req, res) => {
+  res.json(await service.getOrder(input(req)));
+});
+

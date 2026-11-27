@@ -1,50 +1,44 @@
+// Đăng ký – POST /api/auth/register (tài khoản mới luôn là CUSTOMER)
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { ErrorBox } from '../components/ui.jsx';
+import GoogleAuth, { OrDivider } from '../components/GoogleAuth.jsx';
 
 export default function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ fullName: '', email: '', phone: '', password: '' });
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
-  function update(name, value) {
-    setForm((current) => ({ ...current, [name]: value }));
-  }
-
-  async function submit(event) {
-    event.preventDefault();
-    if (form.password !== confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp.');
-      return;
-    }
+  async function submit(e) {
+    e.preventDefault();
     setBusy(true);
-    setError('');
+    setError(null);
     try {
       await register(form);
       navigate('/', { replace: true });
     } catch (err) {
-      setError(err.message);
+      setError(err);
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="mx-auto max-w-md space-y-5">
-      <header><h1 className="text-2xl font-bold text-gray-950">Tạo tài khoản</h1><p className="mt-1 text-sm text-gray-600">Tài khoản mới có vai trò khách hàng.</p></header>
-      <form onSubmit={submit} className="space-y-4">
-        <label className="grid gap-1 text-sm font-medium">Họ và tên<input required maxLength="100" autoComplete="name" value={form.fullName} onChange={(event) => update('fullName', event.target.value)} className="rounded border border-gray-300 px-3 py-2" /></label>
-        <label className="grid gap-1 text-sm font-medium">Email<input required type="email" maxLength="255" autoComplete="email" value={form.email} onChange={(event) => update('email', event.target.value)} className="rounded border border-gray-300 px-3 py-2" /></label>
-        <label className="grid gap-1 text-sm font-medium">Số điện thoại<input required inputMode="numeric" pattern="[0-9]{9,15}" maxLength="15" autoComplete="tel" value={form.phone} onChange={(event) => update('phone', event.target.value)} className="rounded border border-gray-300 px-3 py-2" /></label>
-        <label className="grid gap-1 text-sm font-medium">Mật khẩu<input required type="password" minLength="8" autoComplete="new-password" value={form.password} onChange={(event) => update('password', event.target.value)} className="rounded border border-gray-300 px-3 py-2" /></label>
-        <label className="grid gap-1 text-sm font-medium">Nhập lại mật khẩu<input required type="password" minLength="8" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="rounded border border-gray-300 px-3 py-2" /></label>
-        {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-        <button disabled={busy} className="w-full rounded bg-indigo-700 px-4 py-2.5 font-semibold text-white disabled:opacity-50">{busy ? 'Đang tạo tài khoản…' : 'Đăng ký'}</button>
-      </form>
-      <p className="text-sm text-gray-600">Đã có tài khoản? <Link to="/login" className="font-medium text-indigo-700 underline">Đăng nhập</Link></p>
-    </div>
+    <form onSubmit={submit} className="card p-8 max-w-md mx-auto mt-6 space-y-4">
+      <h1 className="text-2xl font-extrabold">Đăng ký</h1>
+      <GoogleAuth label="Đăng ký bằng Google" onDone={() => navigate('/', { replace: true })} />
+      <OrDivider />
+      <ErrorBox error={error} />
+      <div><label className="label">Họ và tên</label><input required className="input" value={form.fullName} onChange={set('fullName')} /></div>
+      <div><label className="label">Email</label><input type="email" required className="input" value={form.email} onChange={set('email')} /></div>
+      <div><label className="label">Số điện thoại (9–15 chữ số)</label><input required pattern="[0-9]{9,15}" className="input" value={form.phone} onChange={set('phone')} /></div>
+      <div><label className="label">Mật khẩu</label><input type="password" required minLength={6} className="input" value={form.password} onChange={set('password')} /></div>
+      <button className="btn-brand w-full py-3" disabled={busy}>{busy ? 'Đang tạo tài khoản…' : 'Tạo tài khoản'}</button>
+      <p className="text-sm text-gray-600 text-center">Đã có tài khoản? <Link to="/login" className="font-bold text-brand">Đăng nhập</Link></p>
+    </form>
   );
 }
